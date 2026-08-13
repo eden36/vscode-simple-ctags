@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { open } from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { BLOCK_SIZE, MAX_TARGET_SCAN_BYTES } from '../constants';
+import { BLOCK_SIZE, MAX_READ_LINE_BYTES, MAX_TARGET_SCAN_BYTES } from '../constants';
 import type { ResolvedTarget, TagRecord } from '../types';
 import { throwIfCancelled } from '../tags/tagFile';
 import { decodeSearchPattern } from './pattern';
@@ -17,9 +17,14 @@ export class AddressResolver {
     const pattern = decodeSearchPattern(record.address);
     if (lineNumber !== undefined) {
       const line = Math.max(0, lineNumber - 1);
-      const column = pattern ? Math.max(0, pattern.indexOf(symbol)) : 0;
-      const lineText = pattern ?? await readLine(targetUri, line, token);
-      return target(targetUri, line, column, symbol.length, lineText ?? '');
+      const actual = await readLine(targetUri, line, token);
+      // 行内容与搜索地址不一致说明 tags 已过期，改用搜索地址重新定位；
+      // 被 readLine 截断的超长行无法逐字比较，仍按行号定位。
+      const truncated = actual !== undefined && Buffer.byteLength(actual, 'utf8') >= MAX_READ_LINE_BYTES;
+      if (pattern === undefined || truncated || actual === pattern) {
+        const lineText = actual ?? pattern ?? '';
+        return target(targetUri, line, Math.max(0, lineText.indexOf(symbol)), symbol.length, lineText);
+      }
     }
     if (!pattern) {
       return undefined;
@@ -63,10 +68,10 @@ async function findExactLine(
   let index = 0;
   let matches = true;
   let pendingCarriageReturn = false;
+  const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
   try {
     while (position < MAX_TARGET_SCAN_BYTES) {
       throwIfCancelled(token);
-      const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
       const { bytesRead } = await handle.read(
         buffer,
         0,
@@ -118,10 +123,10 @@ async function readLine(
   const bytes: number[] = [];
   let position = 0;
   let line = 0;
+  const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
   try {
     while (position < MAX_TARGET_SCAN_BYTES) {
       throwIfCancelled(token);
-      const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
       const { bytesRead } = await handle.read(
         buffer,
         0,
@@ -144,7 +149,7 @@ async function readLine(
           }
           continue;
         }
-        if (line === targetLine && bytes.length < BLOCK_SIZE) {
+        if (line === targetLine && bytes.length < MAX_READ_LINE_BYTES) {
           bytes.push(byte);
         }
       }

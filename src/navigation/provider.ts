@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import { readConfig } from '../config';
+import { MAX_ANNOUNCED_MESSAGES, MAX_RESOLVE_ATTEMPTS } from '../constants';
 import type { DefinitionLink, DiagnosticSnapshot, LocatedTagFile, ScoredTag, SymbolContext, TagRecord } from '../types';
 import { Diagnostics } from '../diagnostics';
 import { TagFileLocator } from '../tags/locator';
 import { TagService, UnsupportedSortError, VersionChangedError } from '../tags/service';
+import { LruCache } from '../utils/lru';
 import { resolveTargetUri } from './addressResolver';
 import { extractSymbolContext } from './context';
 import { scoreCandidate } from './scoring';
@@ -16,7 +18,7 @@ interface MergedRecord {
 export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscode.Disposable {
   private readonly locator = new TagFileLocator();
   private readonly service: TagService;
-  private readonly warnedVersions = new Set<string>();
+  private readonly announced = new LruCache<string, true>({ maxItems: MAX_ANNOUNCED_MESSAGES });
 
   public constructor(private readonly diagnostics: Diagnostics) {
     this.service = new TagService((message) => diagnostics.report(message));
@@ -48,7 +50,7 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
   public clear(): void {
     this.locator.clear();
     this.service.clear();
-    this.warnedVersions.clear();
+    this.announced.clear();
   }
 
   public dispose(): void {
@@ -58,7 +60,7 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
 
   public async shutdown(): Promise<void> {
     this.locator.clear();
-    this.warnedVersions.clear();
+    this.announced.clear();
     await this.service.shutdown();
   }
 
@@ -69,7 +71,8 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
     diagnostic: boolean
   ): Promise<{ links: DefinitionLink[]; snapshot: DiagnosticSnapshot }> {
     const snapshot: DiagnosticSnapshot = { candidateCount: 0, resultCount: 0, elapsedMs: 0 };
-    const config = readConfig((message) => this.diagnostics.report(message));
+    const config = readConfig((message) => this.reportConfigOnce(message));
+    snapshot.enabled = config.enabled;
     if (!config.enabled || (document.uri.scheme !== 'file' && document.uri.scheme !== 'vscode-remote')) {
       return { links: [], snapshot };
     }
@@ -175,10 +178,14 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
   ): Promise<DefinitionLink[]> {
     const links: DefinitionLink[] = [];
     const seen = new Set<string>();
+    // 解析失败的候选不计入 maxResults，需要单独限制尝试次数，
+    // 否则大量无法定位的候选会各自触发一次目标文件扫描。
+    let attempts = 0;
     for (const candidate of candidates) {
-      if (links.length >= maxResults || token.isCancellationRequested) {
+      if (links.length >= maxResults || attempts >= MAX_RESOLVE_ATTEMPTS || token.isCancellationRequested) {
         break;
       }
+      attempts += 1;
       const resolved = await this.service.resolve(located, candidate.record, context.symbol, token);
       if (!resolved) {
         continue;
@@ -200,12 +207,25 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
   }
 
   private warnOnce(versionKey: string | undefined, message: string): void {
-    const key = `${versionKey ?? 'unknown'}\0${message}`;
-    if (this.warnedVersions.has(key)) {
+    if (!this.announceOnce(`warn\0${versionKey ?? 'unknown'}\0${message}`)) {
       return;
     }
-    this.warnedVersions.add(key);
     this.diagnostics.report(message);
     void vscode.window.showWarningMessage(`Ctags Navigator Lite：${message}`);
+  }
+
+  // 配置非法时每次跳转都会重复上报，去重后才不会挤占诊断缓冲。
+  private reportConfigOnce(message: string): void {
+    if (this.announceOnce(`config\0${message}`)) {
+      this.diagnostics.report(message);
+    }
+  }
+
+  private announceOnce(key: string): boolean {
+    if (this.announced.get(key)) {
+      return false;
+    }
+    this.announced.set(key, true);
+    return true;
   }
 }

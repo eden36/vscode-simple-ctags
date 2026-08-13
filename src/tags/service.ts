@@ -41,7 +41,7 @@ export class TagService implements vscode.Disposable {
   private readonly cache = new LruCache<string, CachedValue>({
     maxItems: MAX_CACHE_ITEMS,
     maxWeight: MAX_CACHE_BYTES,
-    weight: (entry) => Buffer.byteLength(JSON.stringify(entry.value), 'utf8') + 128
+    weight: (entry) => estimateWeight(entry)
   });
   private readonly semaphore = new Semaphore(MAX_CONCURRENT_QUERIES);
   private readonly resolver = new AddressResolver();
@@ -58,7 +58,7 @@ export class TagService implements vscode.Disposable {
   }
 
   public async sortStatus(located: LocatedTagFile, token: vscode.CancellationToken): Promise<SortStatus> {
-    return (await this.getFile(located)).getSortStatus(token);
+    return this.getFile(located).getSortStatus(token);
   }
 
   public async query(
@@ -78,7 +78,7 @@ export class TagService implements vscode.Disposable {
     if (cached?.type === 'query') {
       return cached.value;
     }
-    const file = await this.getFile(located);
+    const file = this.getFile(located);
     const records = await file.query(symbol, maxCandidates, token);
     await this.ensureUnchanged(located);
     this.cache.set(key, { type: 'query', tagUri, value: records });
@@ -130,7 +130,7 @@ export class TagService implements vscode.Disposable {
     await Promise.allSettled([...this.closing]);
   }
 
-  private async getFile(located: LocatedTagFile): Promise<BinaryTagFile> {
+  private getFile(located: LocatedTagFile): BinaryTagFile {
     const key = located.uri.toString();
     const existing = this.files.get(key);
     if (existing && sameVersion(existing.version, located.version)) {
@@ -151,6 +151,25 @@ export class TagService implements vscode.Disposable {
       throw new VersionChangedError();
     }
   }
+}
+
+// 估算缓存条目字节数，避免为计重反复序列化整个结果集。
+function estimateWeight(entry: CachedValue): number {
+  if (entry.type === 'address') {
+    return 256 + textWeight(entry.value?.lineText) + textWeight(entry.value?.uri.toString());
+  }
+  let total = 128;
+  for (const record of entry.value) {
+    total += 128 + textWeight(record.name) + textWeight(record.file) + textWeight(record.address);
+    for (const [key, value] of Object.entries(record.fields)) {
+      total += 16 + textWeight(key) + textWeight(value);
+    }
+  }
+  return total;
+}
+
+function textWeight(value: string | undefined): number {
+  return value === undefined ? 0 : value.length * 2;
 }
 
 function versionKey(file: LocatedTagFile): string {

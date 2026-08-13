@@ -23,7 +23,13 @@ export class TagFileLocator {
     const directory = vscode.Uri.joinPath(documentUri, '..');
     const key = `${folder.uri.toString()}\0${directory.toString()}\0${names.join('\0')}`;
     const cached = this.cache.get(key);
-    if (!cached?.uri && cached?.expiresAt && cached.expiresAt > Date.now()) {
+    if (cached?.uri) {
+      const version = await fileVersion(cached.uri);
+      if (version) {
+        return { uri: cached.uri, version };
+      }
+      this.cache.delete(key);
+    } else if (cached?.expiresAt && cached.expiresAt > Date.now()) {
       return undefined;
     }
 

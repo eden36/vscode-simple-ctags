@@ -10,6 +10,11 @@ describe('搜索地址解码', () => {
     assert.equal(decodeSearchPattern('?^hello$?'), 'hello');
   });
 
+  it('区分行锚点与转义的美元符号', () => {
+    assert.equal(decodeSearchPattern('/^price = 100\\$$/'), 'price = 100$');
+    assert.equal(decodeSearchPattern('/^value = foo\\\\$/'), 'value = foo\\');
+  });
+
   it('拒绝非搜索地址', () => {
     assert.equal(decodeSearchPattern('42'), undefined);
     assert.equal(decodeSearchPattern('/missing-end'), undefined);

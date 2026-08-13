@@ -1,9 +1,12 @@
 export const BLOCK_SIZE = 32 * 1024;
 export const MAX_TAG_LINE_BYTES = 1024 * 1024;
 export const MAX_TARGET_SCAN_BYTES = 32 * 1024 * 1024;
+export const MAX_READ_LINE_BYTES = 32 * 1024;
 export const MAX_OPEN_TAG_FILES = 4;
 export const MAX_LOCATOR_CACHE_ITEMS = 256;
 export const MAX_CACHE_ITEMS = 128;
 export const MAX_CACHE_BYTES = 4 * 1024 * 1024;
 export const NEGATIVE_CACHE_TTL_MS = 2_000;
 export const MAX_CONCURRENT_QUERIES = 4;
+export const MAX_RESOLVE_ATTEMPTS = 200;
+export const MAX_ANNOUNCED_MESSAGES = 64;

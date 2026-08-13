@@ -55,6 +55,7 @@ export interface DefinitionLink extends vscode.LocationLink {
 }
 
 export interface DiagnosticSnapshot {
+  enabled?: boolean;
   symbol?: string;
   qualifier?: string;
   tagFile?: string;

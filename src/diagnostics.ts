@@ -21,6 +21,7 @@ export class Diagnostics implements vscode.Disposable {
     const channel = this.getChannel();
     channel.appendLine('');
     channel.appendLine('=== 当前符号诊断 ===');
+    channel.appendLine(`启用状态：${snapshot.enabled === false ? '已禁用' : '已启用'}`);
     channel.appendLine(`符号：${snapshot.symbol ?? '无'}`);
     channel.appendLine(`限定上下文：${snapshot.qualifier ?? '无'}`);
     channel.appendLine(`tags 文件：${snapshot.tagFile ?? '未找到'}`);

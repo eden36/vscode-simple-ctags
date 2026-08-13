@@ -10,8 +10,17 @@ export function decodeSearchPattern(address: string): string | undefined {
   if (body.startsWith('^')) {
     body = body.slice(1);
   }
-  if (body.endsWith('$') && !body.endsWith('\\$')) {
+  if (body.endsWith('$') && trailingBackslashCount(body.slice(0, -1)) % 2 === 0) {
     body = body.slice(0, -1);
   }
   return body.replace(/\\(.)/gs, '$1');
+}
+
+// 结尾反斜杠为偶数个时，末尾的 $ 才是行锚点而不是被转义的字面量。
+function trailingBackslashCount(value: string): number {
+  let count = 0;
+  while (count < value.length && value[value.length - 1 - count] === '\\') {
+    count += 1;
+  }
+  return count;
 }

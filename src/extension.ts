@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (links.length > 1) {
           const selected = await vscode.window.showQuickPick<DefinitionQuickPickItem>(
             links.map((candidate) => ({
-              label: `${vscode.workspace.asRelativePath(candidate.targetUri, false).replace(/\//g, '\\')}:${
+              label: `${vscode.workspace.asRelativePath(candidate.targetUri, false)}:${
                 (candidate.targetSelectionRange ?? candidate.targetRange).start.line + 1
               }`,
               detail: candidate.targetLineText.trim(),
