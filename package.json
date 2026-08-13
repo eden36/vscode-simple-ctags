@@ -1,0 +1,112 @@
+{
+  "name": "ctags-navigator-lite",
+  "displayName": "Ctags Navigator Lite",
+  "description": "基于已有经典 tags 文件的轻量、语言无关定义跳转。",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ctags",
+    "navigation",
+    "definition"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "ctagsNavigator.goToDefinition",
+        "title": "Ctags Navigator: 跳转到当前符号定义"
+      },
+      {
+        "command": "ctagsNavigator.clearCache",
+        "title": "Ctags Navigator: 清理缓存"
+      },
+      {
+        "command": "ctagsNavigator.diagnoseCurrentSymbol",
+        "title": "Ctags Navigator: 诊断当前符号"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ctagsNavigator.goToDefinition",
+        "key": "ctrl+alt+y",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Ctags Navigator Lite",
+      "properties": {
+        "ctagsNavigator.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用“跳转到当前符号定义”命令。"
+        },
+        "ctagsNavigator.tagFileNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "tags",
+            ".tags"
+          ],
+          "minItems": 1,
+          "description": "按优先级查找的 tags 文件名。只允许文件名。"
+        },
+        "ctagsNavigator.maxResults": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "单次定义请求返回的最大候选数。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs --production",
+    "debug": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc --noEmit",
+    "lint": "eslint src test --ext .ts",
+    "test": "npm run check && mocha --require ts-node/register --require source-map-support/register \"test/unit/**/*.test.ts\"",
+    "test:integration": "npm run build && tsc && node out/test/runTest.js",
+    "generate:icon": "node scripts/generate-icon.mjs",
+    "package": "npm run check && npm run lint && npm run build && vsce package --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^8.57.0",
+    "mocha": "^10.7.0",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}
