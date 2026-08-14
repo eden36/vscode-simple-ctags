@@ -2,7 +2,7 @@
   "name": "simple-ctags",
   "displayName": "simple ctags",
   "description": "基于已有经典 tags 文件的轻量、语言无关定义跳转。",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "saltcoreyan",
   "license": "MIT",
   "repository": {
@@ -98,12 +98,13 @@
     "build": "node esbuild.mjs --production",
     "debug": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
+    "vscode:prepublish": "npm run build",
     "check": "tsc --noEmit",
     "lint": "eslint src test --ext .ts",
     "test": "npm run check && mocha --require ts-node/register --require source-map-support/register \"test/unit/**/*.test.ts\"",
     "test:integration": "npm run build && tsc && node out/test/runTest.js",
     "generate:icon": "node scripts/generate-icon.mjs",
-    "package": "npm run check && npm run lint && npm run build && vsce package --allow-missing-repository"
+    "package": "npm run check && npm run lint && vsce package --allow-missing-repository"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.7",

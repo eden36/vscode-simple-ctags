@@ -13,7 +13,7 @@ describe('tags 二分查询', () => {
   let directory: string;
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'ctags-navigator-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'simple-ctags-'));
   });
 
   afterEach(async () => {

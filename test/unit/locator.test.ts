@@ -12,7 +12,7 @@ describe('tags 文件定位', () => {
   let locator: TagFileLocator;
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'ctags-navigator-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'simple-ctags-'));
     locator = new TagFileLocator();
   });
 

@@ -15,7 +15,7 @@ describe('tag 地址解析', () => {
   let resolver: AddressResolver;
 
   beforeEach(async () => {
-    directory = await mkdtemp(path.join(os.tmpdir(), 'ctags-navigator-'));
+    directory = await mkdtemp(path.join(os.tmpdir(), 'simple-ctags-'));
     resolver = new AddressResolver();
   });
 
