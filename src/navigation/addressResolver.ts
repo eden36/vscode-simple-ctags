@@ -6,6 +6,16 @@ import type { ResolvedTarget, TagRecord } from '../types';
 import { throwIfCancelled } from '../tags/tagFile';
 import { decodeSearchPattern } from './pattern';
 
+interface ScannedLine {
+  readonly text: string;
+  readonly truncated: boolean;
+}
+
+interface ScanResult {
+  readonly lines: Map<number, ScannedLine>;
+  readonly patternLines: Map<string, number>;
+}
+
 export class AddressResolver {
   public async resolve(
     record: TagRecord,
@@ -13,27 +23,40 @@ export class AddressResolver {
     symbol: string,
     token: vscode.CancellationToken
   ): Promise<ResolvedTarget | undefined> {
-    const lineNumber = record.line ?? numericAddress(record.address);
-    const pattern = decodeSearchPattern(record.address);
-    if (lineNumber !== undefined) {
-      const line = Math.max(0, lineNumber - 1);
-      const actual = await readLine(targetUri, line, token);
-      // 行内容与搜索地址不一致说明 tags 已过期，改用搜索地址重新定位；
-      // 被 readLine 截断的超长行无法逐字比较，仍按行号定位。
-      const truncated = actual !== undefined && Buffer.byteLength(actual, 'utf8') >= MAX_READ_LINE_BYTES;
-      if (pattern === undefined || truncated || actual === pattern) {
-        const lineText = actual ?? pattern ?? '';
-        return target(targetUri, line, Math.max(0, lineText.indexOf(symbol)), symbol.length, lineText);
+    const resolved = await this.resolveBatch([record], targetUri, symbol, token);
+    return resolved.get(record.bytePosition);
+  }
+
+  // 同一目标文件的候选合并成一次顺序扫描，避免每个候选各自从文件头重扫一遍。
+  public async resolveBatch(
+    records: readonly TagRecord[],
+    targetUri: vscode.Uri,
+    symbol: string,
+    token: vscode.CancellationToken
+  ): Promise<Map<number, ResolvedTarget | undefined>> {
+    const results = new Map<number, ResolvedTarget | undefined>();
+    if (records.length === 0) {
+      return results;
+    }
+
+    const wantedLines = new Set<number>();
+    const patterns = new Set<string>();
+    for (const record of records) {
+      const lineNumber = record.line ?? numericAddress(record.address);
+      if (lineNumber !== undefined) {
+        wantedLines.add(Math.max(0, lineNumber - 1));
+      }
+      const pattern = decodeSearchPattern(record.address);
+      if (pattern) {
+        patterns.add(pattern);
       }
     }
-    if (!pattern) {
-      return undefined;
+
+    const scan = await scanLines(targetUri, wantedLines, patterns, token);
+    for (const record of records) {
+      results.set(record.bytePosition, buildTarget(record, targetUri, symbol, scan));
     }
-    const foundLine = await findExactLine(targetUri, pattern, token);
-    if (foundLine === undefined) {
-      return undefined;
-    }
-    return target(targetUri, foundLine, Math.max(0, pattern.indexOf(symbol)), symbol.length, pattern);
+    return results;
   }
 }
 
@@ -56,74 +79,97 @@ export function resolveTargetUri(tagFileUri: vscode.Uri, file: string): vscode.U
   return vscode.Uri.joinPath(tagDirectory, ...file.split(/[\\/]+/));
 }
 
-async function findExactLine(
-  uri: vscode.Uri,
-  expected: string,
-  token: vscode.CancellationToken
-): Promise<number | undefined> {
-  const expectedBytes = Buffer.from(expected, 'utf8');
-  const handle = await open(uri.fsPath, 'r');
-  let position = 0;
-  let line = 0;
-  let index = 0;
-  let matches = true;
-  let pendingCarriageReturn = false;
-  const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
-  try {
-    while (position < MAX_TARGET_SCAN_BYTES) {
-      throwIfCancelled(token);
-      const { bytesRead } = await handle.read(
-        buffer,
-        0,
-        Math.min(BLOCK_SIZE, MAX_TARGET_SCAN_BYTES - position),
-        position
-      );
-      if (bytesRead === 0) {
-        if (pendingCarriageReturn) {
-          ({ index, matches } = compareByte(0x0d, expectedBytes, index, matches));
-        }
-        return matches && index === expectedBytes.length ? line : undefined;
-      }
-      position += bytesRead;
-      for (let offset = 0; offset < bytesRead; offset += 1) {
-        const byte = buffer[offset];
-        if (byte === 0x0a) {
-          if (matches && index === expectedBytes.length) {
-            return line;
-          }
-          line += 1;
-          index = 0;
-          matches = true;
-          pendingCarriageReturn = false;
-          continue;
-        }
-        if (pendingCarriageReturn) {
-          ({ index, matches } = compareByte(0x0d, expectedBytes, index, matches));
-          pendingCarriageReturn = false;
-        }
-        if (byte === 0x0d) {
-          pendingCarriageReturn = true;
-        } else {
-          ({ index, matches } = compareByte(byte, expectedBytes, index, matches));
-        }
-      }
+function buildTarget(
+  record: TagRecord,
+  targetUri: vscode.Uri,
+  symbol: string,
+  scan: ScanResult
+): ResolvedTarget | undefined {
+  const lineNumber = record.line ?? numericAddress(record.address);
+  const pattern = decodeSearchPattern(record.address);
+  if (lineNumber !== undefined) {
+    const line = Math.max(0, lineNumber - 1);
+    const actual = scan.lines.get(line);
+    // 行内容与搜索地址不一致说明 tags 已过期，改用搜索地址重新定位；
+    // 被截断的超长行无法逐字比较，仍按行号定位。
+    if (pattern === undefined || actual?.truncated || actual?.text === pattern) {
+      const lineText = actual?.text ?? pattern ?? '';
+      return target(targetUri, line, Math.max(0, lineText.indexOf(symbol)), symbol.length, lineText);
     }
+  }
+  if (!pattern) {
     return undefined;
-  } finally {
-    await handle.close().catch(() => undefined);
   }
+  const foundLine = scan.patternLines.get(pattern);
+  if (foundLine === undefined) {
+    return undefined;
+  }
+  return target(targetUri, foundLine, Math.max(0, pattern.indexOf(symbol)), symbol.length, pattern);
 }
 
-async function readLine(
+// 一次顺序读取回答两类问题：指定行号的行内容，以及每个搜索地址首次出现的行号。
+async function scanLines(
   uri: vscode.Uri,
-  targetLine: number,
+  wantedLines: ReadonlySet<number>,
+  patterns: ReadonlySet<string>,
   token: vscode.CancellationToken
-): Promise<string | undefined> {
+): Promise<ScanResult> {
+  const lines = new Map<number, ScannedLine>();
+  const patternLines = new Map<string, number>();
+  if (wantedLines.size === 0 && patterns.size === 0) {
+    return { lines, patternLines };
+  }
+
+  const pendingPatterns = new Set(patterns);
+  let maxPatternBytes = 0;
+  for (const pattern of patterns) {
+    maxPatternBytes = Math.max(maxPatternBytes, Buffer.byteLength(pattern, 'utf8'));
+  }
+  const maxWantedLine = wantedLines.size > 0 ? Math.max(...wantedLines) : -1;
+
   const handle = await open(uri.fsPath, 'r');
-  const bytes: number[] = [];
-  let position = 0;
-  let line = 0;
   const buffer = Buffer.allocUnsafe(BLOCK_SIZE);
+  const chunks: Buffer[] = [];
+  let collected = 0;
+  let lineBytes = 0;
+  let line = 0;
+  let position = 0;
+  let pendingWanted = wantedLines.size;
+
+  const finishLine = (): boolean => {
+    const isWanted = wantedLines.has(line);
+    const truncated = lineBytes > collected;
+    // 比最长搜索地址还长的行不可能匹配，跳过解码；+1 是给 CRLF 行尾可能残留的 \r 留位。
+    const canMatch = !truncated && pendingPatterns.size > 0 && lineBytes <= maxPatternBytes + 1;
+    if (isWanted || canMatch) {
+      const text = stripCarriageReturn(Buffer.concat(chunks, collected)).toString('utf8');
+      if (isWanted) {
+        lines.set(line, { text, truncated });
+        pendingWanted -= 1;
+      }
+      if (canMatch && pendingPatterns.has(text)) {
+        patternLines.set(text, line);
+        pendingPatterns.delete(text);
+      }
+    }
+    line += 1;
+    chunks.length = 0;
+    collected = 0;
+    lineBytes = 0;
+    return pendingWanted <= 0 && pendingPatterns.size === 0 && line > maxWantedLine;
+  };
+
+  // slice 是读缓冲区的视图，下一次 read 会覆写它；只有跨块残留的片段需要复制留存。
+  const append = (slice: Buffer, copy: boolean): void => {
+    lineBytes += slice.length;
+    if (collected < MAX_READ_LINE_BYTES) {
+      const remaining = MAX_READ_LINE_BYTES - collected;
+      const kept = slice.length <= remaining ? slice : slice.subarray(0, remaining);
+      chunks.push(copy ? Buffer.from(kept) : kept);
+      collected += kept.length;
+    }
+  };
+
   try {
     while (position < MAX_TARGET_SCAN_BYTES) {
       throwIfCancelled(token);
@@ -134,42 +180,35 @@ async function readLine(
         position
       );
       if (bytesRead === 0) {
-        return line === targetLine ? Buffer.from(bytes).toString('utf8').replace(/\r$/, '') : undefined;
+        break;
       }
       position += bytesRead;
-      for (let offset = 0; offset < bytesRead; offset += 1) {
-        const byte = buffer[offset];
-        if (byte === 0x0a) {
-          if (line === targetLine) {
-            return Buffer.from(bytes).toString('utf8').replace(/\r$/, '');
-          }
-          line += 1;
-          if (line > targetLine) {
-            return undefined;
-          }
-          continue;
+      const view = buffer.subarray(0, bytesRead);
+      let start = 0;
+      while (start < bytesRead) {
+        const newline = view.indexOf(0x0a, start);
+        if (newline < 0) {
+          append(view.subarray(start), true);
+          break;
         }
-        if (line === targetLine && bytes.length < MAX_READ_LINE_BYTES) {
-          bytes.push(byte);
+        append(view.subarray(start, newline), false);
+        if (finishLine()) {
+          return { lines, patternLines };
         }
+        start = newline + 1;
       }
     }
-    return line === targetLine ? Buffer.from(bytes).toString('utf8').replace(/\r$/, '') : undefined;
+    if (chunks.length > 0 || collected > 0 || lineBytes > 0) {
+      finishLine();
+    }
+    return { lines, patternLines };
   } finally {
     await handle.close().catch(() => undefined);
   }
 }
 
-function compareByte(
-  byte: number,
-  expected: Buffer,
-  index: number,
-  matches: boolean
-): { index: number; matches: boolean } {
-  return {
-    index: index + 1,
-    matches: matches && index < expected.length && expected[index] === byte
-  };
+function stripCarriageReturn(line: Buffer): Buffer {
+  return line.at(-1) === 0x0d ? line.subarray(0, -1) : line;
 }
 
 function numericAddress(address: string): number | undefined {

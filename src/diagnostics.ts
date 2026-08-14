@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { MAX_PENDING_MESSAGES } from './constants';
 import type { DiagnosticSnapshot } from './types';
 
 export class Diagnostics implements vscode.Disposable {
@@ -12,7 +13,7 @@ export class Diagnostics implements vscode.Disposable {
       return;
     }
     this.pending.push(formatted);
-    if (this.pending.length > 100) {
+    if (this.pending.length > MAX_PENDING_MESSAGES) {
       this.pending.shift();
     }
   }

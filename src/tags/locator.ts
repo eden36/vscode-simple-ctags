@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { stat } from 'node:fs/promises';
 import * as vscode from 'vscode';
-import { MAX_LOCATOR_CACHE_ITEMS, NEGATIVE_CACHE_TTL_MS } from '../constants';
+import { MAX_LOCATOR_CACHE_ITEMS, NEGATIVE_CACHE_TTL_MS, POSITIVE_CACHE_TTL_MS } from '../constants';
 import type { FileVersion, LocatedTagFile } from '../types';
 import { LruCache } from '../utils/lru';
 
@@ -23,13 +23,14 @@ export class TagFileLocator {
     const directory = vscode.Uri.joinPath(documentUri, '..');
     const key = `${folder.uri.toString()}\0${directory.toString()}\0${names.join('\0')}`;
     const cached = this.cache.get(key);
-    if (cached?.uri) {
+    // 命中的 tags 也要过期重查，否则用户在更靠近当前文件的目录新建 tags 后仍会跳到祖先目录的旧文件。
+    if (cached?.uri && cached.expiresAt !== undefined && cached.expiresAt > Date.now()) {
       const version = await fileVersion(cached.uri);
       if (version) {
         return { uri: cached.uri, version };
       }
       this.cache.delete(key);
-    } else if (cached?.expiresAt && cached.expiresAt > Date.now()) {
+    } else if (cached && !cached.uri && cached.expiresAt !== undefined && cached.expiresAt > Date.now()) {
       return undefined;
     }
 
@@ -39,7 +40,7 @@ export class TagFileLocator {
         const candidate = vscode.Uri.joinPath(current, name);
         const version = await fileVersion(candidate);
         if (version) {
-          this.cache.set(key, { uri: candidate });
+          this.cache.set(key, { uri: candidate, expiresAt: Date.now() + POSITIVE_CACHE_TTL_MS });
           return { uri: candidate, version };
         }
       }

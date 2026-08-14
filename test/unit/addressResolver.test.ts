@@ -6,8 +6,8 @@ import { Uri, cancellationToken as token } from './support/vscodeStub';
 import { AddressResolver, resolveTargetUri } from '../../src/navigation/addressResolver';
 import type { TagRecord } from '../../src/types';
 
-function record(address: string, line?: number): TagRecord {
-  return { name: 'target', file: 'source.ts', address, line, fields: {}, bytePosition: 0 };
+function record(address: string, line?: number, bytePosition = 0): TagRecord {
+  return { name: 'target', file: 'source.ts', address, line, fields: {}, bytePosition };
 }
 
 describe('tag 地址解析', () => {
@@ -64,6 +64,45 @@ describe('tag 地址解析', () => {
   it('搜索地址在文件中不存在时返回未解析', async () => {
     const uri = await source(['first', 'second']);
     assert.equal(await resolver.resolve(record('/^function target() {}$/'), uri, 'target', token), undefined);
+  });
+
+  it('同一文件的多个候选在一次批量解析中各自定位', async () => {
+    const uri = await source([
+      'first',
+      'function alpha() {}',
+      'third',
+      'function target() {}',
+      'function beta() {}'
+    ]);
+    const resolved = await resolver.resolveBatch(
+      [
+        record('4', undefined, 10),
+        record('/^function alpha() {}$/', undefined, 20),
+        record('/^function beta() {}$/', 2, 30),
+        record('/^function missing() {}$/', undefined, 40)
+      ],
+      uri,
+      'target',
+      token
+    );
+    assert.equal(resolved.get(10)?.selectionRange.start.line, 3);
+    assert.equal(resolved.get(20)?.selectionRange.start.line, 1);
+    // 行号 2 的实际内容与搜索地址不符，应回退到搜索地址定位到第 5 行。
+    assert.equal(resolved.get(30)?.selectionRange.start.line, 4);
+    assert.equal(resolved.get(40), undefined);
+  });
+
+  it('批量解析支持跨读取块的长行与 CRLF 行尾', async () => {
+    const padding = 'x'.repeat(40 * 1024);
+    const uri = await source([`const ${padding} = 1`, 'function target() {}'], '\r\n');
+    const resolved = await resolver.resolveBatch(
+      [record('/^function target() {}$/', undefined, 10), record('2', undefined, 20)],
+      uri,
+      'target',
+      token
+    );
+    assert.equal(resolved.get(10)?.selectionRange.start.line, 1);
+    assert.equal(resolved.get(20)?.lineText, 'function target() {}');
   });
 
   it('相对与绝对文件字段都能换算为目标 URI', () => {

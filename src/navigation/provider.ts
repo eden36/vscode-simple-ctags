@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import { readConfig } from '../config';
 import { MAX_ANNOUNCED_MESSAGES, MAX_RESOLVE_ATTEMPTS } from '../constants';
-import type { DefinitionLink, DiagnosticSnapshot, LocatedTagFile, ScoredTag, SymbolContext, TagRecord } from '../types';
+import type {
+  DefinitionLink,
+  DiagnosticSnapshot,
+  LocatedTagFile,
+  ResolvedTarget,
+  ScoredTag,
+  SymbolContext,
+  TagRecord
+} from '../types';
 import { Diagnostics } from '../diagnostics';
 import { TagFileLocator } from '../tags/locator';
 import { TagService, UnsupportedSortError, VersionChangedError } from '../tags/service';
@@ -15,7 +23,8 @@ interface MergedRecord {
   readonly queries: Set<string>;
 }
 
-export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscode.Disposable {
+// 只服务于本扩展的跳转命令，不注册为 vscode.DefinitionProvider，不接管 F12 / Peek Definition。
+export class CtagsDefinitionProvider implements vscode.Disposable {
   private readonly locator = new TagFileLocator();
   private readonly service: TagService;
   private readonly announced = new LruCache<string, true>({ maxItems: MAX_ANNOUNCED_MESSAGES });
@@ -54,7 +63,8 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
   }
 
   public dispose(): void {
-    this.clear();
+    this.locator.clear();
+    this.announced.clear();
     this.service.dispose();
   }
 
@@ -176,17 +186,38 @@ export class CtagsDefinitionProvider implements vscode.DefinitionProvider, vscod
     maxResults: number,
     token: vscode.CancellationToken
   ): Promise<DefinitionLink[]> {
-    const links: DefinitionLink[] = [];
-    const seen = new Set<string>();
     // 解析失败的候选不计入 maxResults，需要单独限制尝试次数，
     // 否则大量无法定位的候选会各自触发一次目标文件扫描。
-    let attempts = 0;
-    for (const candidate of candidates) {
-      if (links.length >= maxResults || attempts >= MAX_RESOLVE_ATTEMPTS || token.isCancellationRequested) {
+    const attempted = candidates.slice(0, MAX_RESOLVE_ATTEMPTS);
+    const groups = new Map<string, { readonly uri: vscode.Uri; readonly records: TagRecord[] }>();
+    for (const candidate of attempted) {
+      const key = candidate.targetUri.toString();
+      const group = groups.get(key);
+      if (group) {
+        group.records.push(candidate.record);
+      } else {
+        groups.set(key, { uri: candidate.targetUri, records: [candidate.record] });
+      }
+    }
+
+    const resolvedByFile = new Map<string, Map<number, ResolvedTarget | undefined>>();
+    for (const [key, group] of groups) {
+      if (token.isCancellationRequested) {
         break;
       }
-      attempts += 1;
-      const resolved = await this.service.resolve(located, candidate.record, context.symbol, token);
+      resolvedByFile.set(
+        key,
+        await this.service.resolveGroup(located, group.uri, group.records, context.symbol, token)
+      );
+    }
+
+    const links: DefinitionLink[] = [];
+    const seen = new Set<string>();
+    for (const candidate of attempted) {
+      if (links.length >= maxResults) {
+        break;
+      }
+      const resolved = resolvedByFile.get(candidate.targetUri.toString())?.get(candidate.record.bytePosition);
       if (!resolved) {
         continue;
       }

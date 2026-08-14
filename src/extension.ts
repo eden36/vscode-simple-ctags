@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import * as vscode from 'vscode';
+import { readConfig } from './config';
+import { CTAGS_MAX_BUFFER_BYTES, CTAGS_TIMEOUT_MS } from './constants';
 import { Diagnostics } from './diagnostics';
 import type { DefinitionLink } from './types';
 import { CtagsDefinitionProvider } from './navigation/provider';
@@ -9,8 +10,10 @@ interface DefinitionQuickPickItem extends vscode.QuickPickItem {
   readonly link: DefinitionLink;
 }
 
+// 这些目录几乎不含需要跳转的定义，全量索引会显著拖慢生成并污染候选排序。
+const CTAGS_EXCLUDES = ['.git', 'node_modules', 'dist', 'out', 'build', 'target', '.vscode-test'] as const;
+
 let activeProvider: CtagsDefinitionProvider | undefined;
-const execFileAsync = promisify(execFile);
 
 export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = new Diagnostics();
@@ -75,6 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('ctagsNavigator.generateTags', async () => {
       if (isGeneratingTags) {
+        void vscode.window.showInformationMessage('Ctags Navigator Lite：正在生成 tags 文件，请等待本次生成结束。');
         return;
       }
       if (!vscode.workspace.isTrusted) {
@@ -105,26 +109,33 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
+      // 生成的文件名必须取自配置，否则用户改过 tagFileNames 后跳转会找不到刚生成的文件。
+      const tagFileName = readConfig((message) => diagnostics.report(message)).tagFileNames[0];
       isGeneratingTags = true;
       try {
-        await vscode.window.withProgress(
+        const outcome = await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: '正在生成 tags 文件',
-            cancellable: false
+            title: `正在生成 ${tagFileName} 文件`,
+            cancellable: true
           },
-          async () => {
-            await execFileAsync('ctags', ['--sort=yes', '--fields=+n', '-R', '-f', '.tags', '.'], {
-              cwd: folder.uri.fsPath,
-              windowsHide: true
-            });
-          }
+          (_progress, token) => runCtags(folder.uri.fsPath, tagFileName, token)
         );
         provider.clear();
-        void vscode.window.showInformationMessage(`已在“${folder.name}”生成 .tags 文件。`);
+        if (outcome === 'cancelled') {
+          void vscode.window.showWarningMessage(`已取消生成 ${tagFileName} 文件，工作区中可能残留不完整的内容。`);
+          return;
+        }
+        void vscode.window.showInformationMessage(`已在“${folder.name}”生成 ${tagFileName} 文件。`);
       } catch (error) {
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
           void vscode.window.showWarningMessage('未找到 ctags。请安装 Universal Ctags，并确保其已加入 PATH。');
+          return;
+        }
+        if (error && typeof error === 'object' && 'killed' in error && error.killed === true) {
+          void vscode.window.showWarningMessage(
+            `生成 ${tagFileName} 文件超时（超过 ${CTAGS_TIMEOUT_MS / 60_000} 分钟）已中止，请缩小工作区范围后重试。`
+          );
           return;
         }
         const message = error instanceof Error ? error.message : String(error);
@@ -150,4 +161,47 @@ export async function deactivate(): Promise<void> {
   const provider = activeProvider;
   activeProvider = undefined;
   await provider?.shutdown();
+}
+
+// 用固定参数而非 shell 命令字符串启动一次 ctags；取消时结束子进程并按已取消返回，不当作失败。
+function runCtags(
+  cwd: string,
+  tagFileName: string,
+  token: vscode.CancellationToken
+): Promise<'completed' | 'cancelled'> {
+  return new Promise((resolve, reject) => {
+    let cancelled = false;
+    const child = execFile(
+      'ctags',
+      [
+        '--sort=yes',
+        '--fields=+n',
+        ...CTAGS_EXCLUDES.map((name) => `--exclude=${name}`),
+        '-R',
+        '-f',
+        tagFileName,
+        '.'
+      ],
+      {
+        cwd,
+        windowsHide: true,
+        maxBuffer: CTAGS_MAX_BUFFER_BYTES,
+        timeout: CTAGS_TIMEOUT_MS
+      },
+      (error) => {
+        cancellation.dispose();
+        if (cancelled) {
+          resolve('cancelled');
+        } else if (error) {
+          reject(error);
+        } else {
+          resolve('completed');
+        }
+      }
+    );
+    const cancellation = token.onCancellationRequested(() => {
+      cancelled = true;
+      child.kill();
+    });
+  });
 }

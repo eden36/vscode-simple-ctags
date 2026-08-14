@@ -25,12 +25,13 @@ export function readConfig(report: (message: string) => void): NavigatorConfig {
     tagFileNames = [...DEFAULT_NAMES];
   }
 
-  let maxResults = typeof rawMaxResults === 'number' && Number.isInteger(rawMaxResults)
-    ? rawMaxResults
-    : 50;
-  if (maxResults < 1 || maxResults > 200) {
+  let maxResults = 50;
+  if (typeof rawMaxResults !== 'number' || !Number.isInteger(rawMaxResults)) {
+    report('配置 ctagsNavigator.maxResults 不是整数，已使用默认值 50。');
+  } else if (rawMaxResults < 1 || rawMaxResults > 200) {
     report('配置 ctagsNavigator.maxResults 超出 1–200，已使用默认值 50。');
-    maxResults = 50;
+  } else {
+    maxResults = rawMaxResults;
   }
 
   return { enabled, tagFileNames, maxResults };

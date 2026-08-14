@@ -34,10 +34,6 @@ export class LruCache<K, V> {
     return entry.value;
   }
 
-  public peek(key: K): V | undefined {
-    return this.entries.get(key)?.value;
-  }
-
   public set(key: K, value: V): void {
     this.delete(key);
     const weight = Math.max(0, this.options.weight?.(value, key) ?? 1);

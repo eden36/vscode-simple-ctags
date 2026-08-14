@@ -22,9 +22,6 @@
     "workspace"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true
@@ -54,6 +51,7 @@
       "editor/context": [
         {
           "command": "ctagsNavigator.generateTags",
+          "when": "editorTextFocus && workspaceFolderCount != 0 && isWorkspaceTrusted",
           "group": "z_ctagsNavigator@9999"
         }
       ]

@@ -71,11 +71,3 @@ export function unescapeField(value: string): string {
     }
   });
 }
-
-export function tagNameFromLine(line: Buffer): string | undefined {
-  const tab = line.indexOf(0x09);
-  if (tab <= 0) {
-    return undefined;
-  }
-  return line.subarray(0, tab).toString('utf8');
-}

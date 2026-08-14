@@ -5,7 +5,7 @@ import {
   MAX_CONCURRENT_QUERIES,
   MAX_OPEN_TAG_FILES
 } from '../constants';
-import { AddressResolver, resolveTargetUri } from '../navigation/addressResolver';
+import { AddressResolver } from '../navigation/addressResolver';
 import type { LocatedTagFile, ResolvedTarget, SortStatus, TagRecord } from '../types';
 import { LruCache } from '../utils/lru';
 import { Semaphore } from '../utils/semaphore';
@@ -85,29 +85,48 @@ export class TagService implements vscode.Disposable {
     return records;
   }
 
-  public async resolve(
+  // 同一目标文件的候选一起解析，未命中缓存的部分只触发一次文件扫描。
+  public async resolveGroup(
     located: LocatedTagFile,
-    record: TagRecord,
+    targetUri: vscode.Uri,
+    records: readonly TagRecord[],
     symbol: string,
     token: vscode.CancellationToken
-  ): Promise<ResolvedTarget | undefined> {
-    const targetUri = resolveTargetUri(located.uri, record.file);
+  ): Promise<Map<number, ResolvedTarget | undefined>> {
+    const results = new Map<number, ResolvedTarget | undefined>();
     const targetVersion = await fileVersion(targetUri);
     if (!targetVersion) {
-      return undefined;
+      return results;
     }
     const tagUri = located.uri.toString();
-    const key = [
-      'a', tagUri, versionKey(located), targetUri.toString(),
-      targetVersion.size, targetVersion.mtimeMs, record.bytePosition, symbol
-    ].join('\0');
-    const cached = this.cache.get(key);
-    if (cached?.type === 'address') {
-      return cached.value;
+    const pending: Array<{ readonly record: TagRecord; readonly key: string }> = [];
+    for (const record of records) {
+      const key = [
+        'a', tagUri, versionKey(located), targetUri.toString(),
+        targetVersion.size, targetVersion.mtimeMs, record.bytePosition, symbol
+      ].join('\0');
+      const cached = this.cache.get(key);
+      if (cached?.type === 'address') {
+        results.set(record.bytePosition, cached.value);
+      } else {
+        pending.push({ record, key });
+      }
     }
-    const resolved = await this.resolver.resolve(record, targetUri, symbol, token);
-    this.cache.set(key, { type: 'address', tagUri, value: resolved });
-    return resolved;
+    if (pending.length === 0) {
+      return results;
+    }
+    const resolved = await this.resolver.resolveBatch(
+      pending.map((item) => item.record),
+      targetUri,
+      symbol,
+      token
+    );
+    for (const { record, key } of pending) {
+      const value = resolved.get(record.bytePosition);
+      results.set(record.bytePosition, value);
+      this.cache.set(key, { type: 'address', tagUri, value });
+    }
+    return results;
   }
 
   public clear(): void {

@@ -26,6 +26,18 @@ describe('VS Code 定义导航', () => {
 
   });
 
+  it('四个命令都已注册到宿主', async () => {
+    const commands = await vscode.commands.getCommands(true);
+    for (const id of [
+      'ctagsNavigator.goToDefinition',
+      'ctagsNavigator.clearCache',
+      'ctagsNavigator.diagnoseCurrentSymbol',
+      'ctagsNavigator.generateTags'
+    ]) {
+      assert.ok(commands.includes(id), `命令未注册：${id}`);
+    }
+  });
+
   it('运行时关闭配置后不跳转', async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder);
