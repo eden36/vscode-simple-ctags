@@ -18,6 +18,10 @@ export class Diagnostics implements vscode.Disposable {
     }
   }
 
+  public show(): void {
+    this.getChannel().show(true);
+  }
+
   public showSnapshot(snapshot: DiagnosticSnapshot): void {
     const channel = this.getChannel();
     channel.appendLine('');

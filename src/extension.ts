@@ -1,7 +1,15 @@
 import { execFile } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import * as vscode from 'vscode';
 import { readConfig } from './config';
-import { CTAGS_MAX_BUFFER_BYTES, CTAGS_TIMEOUT_MS } from './constants';
+import {
+  CTAGS_LOG_MAX_LINES,
+  CTAGS_MAX_BUFFER_BYTES,
+  CTAGS_PROGRESS_INTERVAL_MS,
+  CTAGS_PROGRESS_MAX_LINES,
+  CTAGS_PROGRESS_MESSAGE_MAX_CHARS,
+  CTAGS_TIMEOUT_MS
+} from './constants';
 import { Diagnostics } from './diagnostics';
 import type { DefinitionLink } from './types';
 import { CtagsDefinitionProvider } from './navigation/provider';
@@ -10,8 +18,51 @@ interface DefinitionQuickPickItem extends vscode.QuickPickItem {
   readonly link: DefinitionLink;
 }
 
-// 这些目录几乎不含需要跳转的定义，全量索引会显著拖慢生成并污染候选排序。
-const CTAGS_EXCLUDES = ['.git', 'node_modules', 'dist', 'out', 'build', 'target', '.vscode-test'] as const;
+// 这些目录几乎不含需要跳转的定义，全量索引会显著拖慢生成并污染候选排序；
+// 其中打包压缩过的文件还会让 ctags 逐行输出通知，单个目录就可能产生数 MB 标准错误。
+const CTAGS_EXCLUDES = [
+  '.git',
+  '.hg',
+  '.svn',
+  'node_modules',
+  'bower_components',
+  'vendor',
+  'Pods',
+  'Carthage',
+  '.yarn',
+  '.pnpm-store',
+  '.bundle',
+  '.cargo',
+  '.gradle',
+  '.m2',
+  'site-packages',
+  '.venv',
+  'venv',
+  '.tox',
+  '.dart_tool',
+  '.pub-cache',
+  'dist',
+  'out',
+  'build',
+  'target',
+  'obj',
+  'coverage',
+  '.output',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.turbo',
+  '.parcel-cache',
+  '.cache',
+  '__pycache__',
+  '.mypy_cache',
+  '.pytest_cache',
+  '.terraform',
+  'DerivedData',
+  '.idea',
+  '.vscode-test'
+] as const;
+const PROGRESS_PLACEHOLDER = '\u2800';
 
 let activeProvider: CtagsDefinitionProvider | undefined;
 
@@ -122,7 +173,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       // 生成的文件名必须取自配置，否则用户改过 tagFileNames 后跳转会找不到刚生成的文件。
-      const tagFileName = readConfig((message) => diagnostics.report(message)).tagFileNames[0];
+      const report = (message: string): void => diagnostics.report(message);
+      const tagFileName = readConfig(report).tagFileNames[0];
       isGeneratingTags = true;
       try {
         const outcome = await vscode.window.withProgress(
@@ -131,7 +183,7 @@ export function activate(context: vscode.ExtensionContext): void {
             title: `正在生成 ${tagFileName} 文件`,
             cancellable: true
           },
-          (_progress, token) => runCtags(folder.uri.fsPath, tagFileName, token)
+          (progress, token) => runCtags(folder.uri.fsPath, tagFileName, report, progress, token)
         );
         provider.clear();
         if (outcome === 'cancelled') {
@@ -186,21 +238,47 @@ export async function deactivate(): Promise<void> {
 function runCtags(
   cwd: string,
   tagFileName: string,
+  report: (message: string) => void,
+  progress: vscode.Progress<{ message?: string; increment?: number }>,
   token: vscode.CancellationToken
 ): Promise<'completed' | 'cancelled'> {
+  const args = [
+    '--sort=yes',
+    '--fields=+n',
+    ...CTAGS_EXCLUDES.map((name) => `--exclude=${name}`),
+    '-R',
+    '-f',
+    tagFileName,
+    '.'
+  ];
+  report('=== 生成 tags ===');
+  report(`工作目录：${cwd}`);
+  report(`执行命令：ctags ${args.join(' ')}`);
+  const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     let cancelled = false;
+    const progressOutputLines: string[] = [];
+    const appendProgressOutput = (line: string): void => {
+      progressOutputLines.push(line);
+      if (progressOutputLines.length > CTAGS_PROGRESS_MAX_LINES) {
+        progressOutputLines.shift();
+      }
+    };
+    const reportProgress = (): void => {
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      const visibleLines = [...progressOutputLines];
+      while (visibleLines.length < CTAGS_PROGRESS_MAX_LINES) {
+        visibleLines.push(PROGRESS_PLACEHOLDER);
+      }
+      progress.report({ message: [`已执行 ${elapsedSeconds} 秒。`, ...visibleLines].join('\n') });
+    };
+    reportProgress();
+    const progressTimer = setInterval(() => {
+      reportProgress();
+    }, CTAGS_PROGRESS_INTERVAL_MS);
     const child = execFile(
       'ctags',
-      [
-        '--sort=yes',
-        '--fields=+n',
-        ...CTAGS_EXCLUDES.map((name) => `--exclude=${name}`),
-        '-R',
-        '-f',
-        tagFileName,
-        '.'
-      ],
+      args,
       {
         cwd,
         windowsHide: true,
@@ -208,19 +286,83 @@ function runCtags(
         timeout: CTAGS_TIMEOUT_MS
       },
       (error) => {
+        clearInterval(progressTimer);
         cancellation.dispose();
+        finishStdout();
+        finishStderr();
+        report(`ctags 结束，耗时 ${((Date.now() - startedAt) / 1000).toFixed(1)} 秒。`);
         if (cancelled) {
+          report('本次生成已被用户取消。');
           resolve('cancelled');
         } else if (error) {
+          report(`ctags 执行失败：${error.message}`);
           reject(error);
         } else {
           resolve('completed');
         }
       }
     );
+    const showProgressOutput = (label: string, line: string): void => {
+      const normalized = line.replace(/\p{Cc}/gu, '').trim();
+      if (!normalized) {
+        return;
+      }
+      const output = `${label}：${normalized}`;
+      appendProgressOutput(
+        output.length > CTAGS_PROGRESS_MESSAGE_MAX_CHARS
+          ? `${output.slice(0, CTAGS_PROGRESS_MESSAGE_MAX_CHARS - 1)}…`
+          : output
+      );
+      reportProgress();
+    };
+    const finishStdout = reportOutput(child.stdout, report, '标准输出', showProgressOutput);
+    const finishStderr = reportOutput(child.stderr, report, '标准错误', showProgressOutput);
     const cancellation = token.onCancellationRequested(() => {
       cancelled = true;
       child.kill();
     });
   });
+}
+
+// ctags 会对压缩过的文件逐行输出通知，总量可达数 MB；实时显示开头若干行，避免撑爆输出通道。
+function reportOutput(
+  stream: Readable | null,
+  report: (message: string) => void,
+  label: string,
+  showProgressOutput: (label: string, line: string) => void
+): () => void {
+  let pending = '';
+  let reportedLines = 0;
+  let omittedLines = 0;
+  let headingReported = false;
+  const reportLine = (line: string): void => {
+    showProgressOutput(label, line);
+    if (!headingReported) {
+      report(`${label}：`);
+      headingReported = true;
+    }
+    if (reportedLines < CTAGS_LOG_MAX_LINES) {
+      report(`  ${line}`);
+      reportedLines += 1;
+    } else {
+      omittedLines += 1;
+    }
+  };
+  const onData = (chunk: Buffer | string): void => {
+    const lines = `${pending}${chunk.toString()}`.split(/\r?\n/);
+    pending = lines.pop() ?? '';
+    for (const line of lines) {
+      reportLine(line);
+    }
+  };
+  stream?.on('data', onData);
+  return () => {
+    stream?.off('data', onData);
+    if (pending) {
+      reportLine(pending);
+    }
+    if (omittedLines > 0) {
+      report(`  …… 其余 ${omittedLines} 行已省略。`);
+    }
+  };
 }

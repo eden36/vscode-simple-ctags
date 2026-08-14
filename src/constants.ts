@@ -14,3 +14,7 @@ export const MAX_ANNOUNCED_MESSAGES = 64;
 export const MAX_PENDING_MESSAGES = 100;
 export const CTAGS_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 export const CTAGS_TIMEOUT_MS = 10 * 60 * 1000;
+export const CTAGS_PROGRESS_INTERVAL_MS = 1_000;
+export const CTAGS_PROGRESS_MESSAGE_MAX_CHARS = 56;
+export const CTAGS_PROGRESS_MAX_LINES = 8;
+export const CTAGS_LOG_MAX_LINES = 50;

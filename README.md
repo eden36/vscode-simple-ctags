@@ -16,7 +16,7 @@
 
 ## 准备 tags
 
-安装 Universal Ctags 并确保 VS Code 可以找到 `ctags`，点击编辑器右键菜单中的“生成 Tags”即可在当前文件所属工作区的根目录生成 tags。生成的文件名取 `simpleCtags.tagFileNames` 的第一项（默认 `.tags`）。生成过程可取消，超 10 分钟自动中止；默认排除 `.git`、`node_modules`、`dist`、`out`、`build`、`target`、`.vscode-test`。等价手工命令：
+安装 Universal Ctags 并确保 VS Code 可以找到 `ctags`，点击编辑器右键菜单中的“生成 Tags”即可在当前文件所属工作区的根目录生成 tags。生成的文件名取 `simpleCtags.tagFileNames` 的第一项（默认 `.tags`）。生成时通知会以固定行数逐行显示 ctags 最近的输出，长行会截断以避免通知尺寸变化，扩展不会自动打开输出面板；生成过程可取消，超 10 分钟自动中止。默认排除 `.git`、`node_modules`、`dist`、`out`、`build`、`target`、`.vscode-test`。等价手工命令：
 
 ```bash
 ctags --sort=yes --fields=+n --exclude=.git --exclude=node_modules --exclude=dist \
