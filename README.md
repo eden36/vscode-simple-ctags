@@ -1,10 +1,10 @@
-# Ctags Navigator Lite
+# simple ctags
 
 一个语言无关、低资源占用的 VS Code 定义跳转扩展。它读取工作区已有的经典格式 `tags` 或 `.tags`；也可由用户通过编辑器右键菜单调用本机的 ctags，在工作区根目录生成 `.tags` 文件。
 
 ## 功能
 
-- 通过“Ctags Navigator: 跳转到当前符号定义”命令在任意文件类型中跳转；不接管 F12、Ctrl+单击或 Peek Definition。
+- 通过“simple ctags: 跳转到当前符号定义”命令在任意文件类型中跳转；不接管 F12、Ctrl+单击或 Peek Definition。
 - 从当前文件目录向上查找最近的 tags，边界为所属工作区根目录。
 - 支持多根工作区、本地桌面、Remote SSH、WSL 和 Dev Container。
 - 对已排序的 tags 使用 32 KiB 块和字节偏移二分查询，不把整个文件加载到内存。
@@ -41,10 +41,10 @@ ctags --sort=yes --fields=+n --exclude=.git --exclude=node_modules --exclude=dis
 
 ## 命令
 
-- `Ctags Navigator: 跳转到当前符号定义`：单个定义直接跳转，多个定义按“相对路径:行号”和目标行内容显示列表供选择，未找到定义时显示提示。扩展不提供默认快捷键；可在 VS Code 的“键盘快捷方式”中搜索此命令后自行绑定。
-- `Ctags Navigator: 清理缓存`：清理定位、查询和地址缓存，并关闭 tags 文件句柄。
-- `Ctags Navigator: 诊断当前符号`：按需打开输出通道，显示启用状态、符号、限定上下文、tags、排序状态、候选数量和耗时。
-- `Ctags Navigator: 生成或更新 Tags`：调用本机安装的 ctags，在当前文件所属工作区的根目录生成 tags；生成过程可取消，未受信任的工作区不会执行此操作。右键菜单项只在受信任工作区的文本编辑器中出现。
+- `simple ctags: 跳转到当前符号定义`：单个定义直接跳转，多个定义按“相对路径:行号”和目标行内容显示列表供选择，未找到定义时显示提示。扩展不提供默认快捷键；可在 VS Code 的“键盘快捷方式”中搜索此命令后自行绑定。
+- `simple ctags: 清理缓存`：清理定位、查询和地址缓存，并关闭 tags 文件句柄。
+- `simple ctags: 诊断当前符号`：按需打开输出通道，显示启用状态、符号、限定上下文、tags、排序状态、候选数量和耗时。
+- `simple ctags: 生成或更新 Tags`：调用本机安装的 ctags，在当前文件所属工作区的根目录生成 tags；生成过程可取消，未受信任的工作区不会执行此操作。右键菜单项只在受信任工作区的文本编辑器中出现。
 
 ## 资源与安全边界
 

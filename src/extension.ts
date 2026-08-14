@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         const links = await provider.provideDefinition(editor.document, editor.selection.active, source.token);
         if (!links || links.length === 0) {
-          void vscode.window.showInformationMessage('Ctags Navigator Lite：未找到当前符号的定义。');
+          void vscode.window.showInformationMessage('simple ctags：未找到当前符号的定义。');
           return;
         }
         let link = links[0];
@@ -78,7 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('ctagsNavigator.generateTags', async () => {
       if (isGeneratingTags) {
-        void vscode.window.showInformationMessage('Ctags Navigator Lite：正在生成 tags 文件，请等待本次生成结束。');
+        void vscode.window.showInformationMessage('simple ctags：正在生成 tags 文件，请等待本次生成结束。');
         return;
       }
       if (!vscode.workspace.isTrusted) {

@@ -242,7 +242,7 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
       return;
     }
     this.diagnostics.report(message);
-    void vscode.window.showWarningMessage(`Ctags Navigator Lite：${message}`);
+    void vscode.window.showWarningMessage(`simple ctags：${message}`);
   }
 
   // 配置非法时每次跳转都会重复上报，去重后才不会挤占诊断缓冲。

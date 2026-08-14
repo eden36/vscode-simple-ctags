@@ -44,7 +44,7 @@ export class Diagnostics implements vscode.Disposable {
 
   private getChannel(): vscode.OutputChannel {
     if (!this.channel) {
-      this.channel = vscode.window.createOutputChannel('Ctags Navigator Lite');
+      this.channel = vscode.window.createOutputChannel('simple ctags');
       for (const message of this.pending) {
         this.channel.appendLine(message);
       }

@@ -1,9 +1,9 @@
 {
-  "name": "ctags-navigator-lite",
-  "displayName": "Ctags Navigator Lite",
+  "name": "simple-ctags",
+  "displayName": "simple ctags",
   "description": "基于已有经典 tags 文件的轻量、语言无关定义跳转。",
   "version": "0.1.0",
-  "publisher": "local",
+  "publisher": "saltcoreyan",
   "license": "MIT",
   "icon": "assets/icon.png",
   "engines": {
@@ -32,19 +32,19 @@
     "commands": [
       {
         "command": "ctagsNavigator.goToDefinition",
-        "title": "Ctags Navigator: 跳转到当前符号定义"
+        "title": "simple ctags: 跳转到当前符号定义"
       },
       {
         "command": "ctagsNavigator.clearCache",
-        "title": "Ctags Navigator: 清理缓存"
+        "title": "simple ctags: 清理缓存"
       },
       {
         "command": "ctagsNavigator.diagnoseCurrentSymbol",
-        "title": "Ctags Navigator: 诊断当前符号"
+        "title": "simple ctags: 诊断当前符号"
       },
       {
         "command": "ctagsNavigator.generateTags",
-        "title": "Ctags Navigator: 生成或更新 Tags"
+        "title": "simple ctags: 生成或更新 Tags"
       }
     ],
     "menus": {
@@ -57,7 +57,7 @@
       ]
     },
     "configuration": {
-      "title": "Ctags Navigator Lite",
+      "title": "simple ctags",
       "properties": {
         "ctagsNavigator.enabled": {
           "type": "boolean",

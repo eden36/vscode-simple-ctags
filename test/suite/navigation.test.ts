@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 describe('VS Code 定义导航', () => {
   before(async () => {
-    const extension = vscode.extensions.getExtension('local.ctags-navigator-lite');
+    const extension = vscode.extensions.getExtension('local.simple-ctags');
     assert.ok(extension, '扩展未安装到测试宿主');
     await extension.activate();
   });
