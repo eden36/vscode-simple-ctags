@@ -46,13 +46,6 @@
         "title": "Ctags Navigator: 诊断当前符号"
       }
     ],
-    "keybindings": [
-      {
-        "command": "ctagsNavigator.goToDefinition",
-        "key": "ctrl+alt+y",
-        "when": "editorTextFocus"
-      }
-    ],
     "configuration": {
       "title": "Ctags Navigator Lite",
       "properties": {

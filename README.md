@@ -4,7 +4,7 @@
 
 ## 功能
 
-- 通过“Ctags Navigator: 跳转到当前符号定义”命令在任意文件类型中跳转；编辑器聚焦时默认按 Ctrl+Alt+Y 执行；不接管 F12、Ctrl+单击或 Peek Definition。
+- 通过“Ctags Navigator: 跳转到当前符号定义”命令在任意文件类型中跳转；不接管 F12、Ctrl+单击或 Peek Definition。
 - 从当前文件目录向上查找最近的 tags，边界为所属工作区根目录。
 - 支持多根工作区、本地桌面、Remote SSH、WSL 和 Dev Container。
 - 对已排序的 tags 使用 32 KiB 块和字节偏移二分查询，不把整个文件加载到内存。
@@ -36,7 +36,7 @@ ctags --sort=yes --fields=+n -R .
 
 ## 命令
 
-- `Ctags Navigator: 跳转到当前符号定义`：单个定义直接跳转，多个定义按“相对路径:行号”和目标行内容显示列表供选择，未找到定义时显示提示；编辑器聚焦时默认快捷键为 Ctrl+Alt+Y。
+- `Ctags Navigator: 跳转到当前符号定义`：单个定义直接跳转，多个定义按“相对路径:行号”和目标行内容显示列表供选择，未找到定义时显示提示。扩展不提供默认快捷键；可在 VS Code 的“键盘快捷方式”中搜索此命令后自行绑定。
 - `Ctags Navigator: 清理缓存`：清理定位、查询和地址缓存，并关闭 tags 文件句柄。
 - `Ctags Navigator: 诊断当前符号`：按需打开输出通道，显示启用状态、符号、限定上下文、tags、排序状态、候选数量和耗时。
 
