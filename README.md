@@ -2,6 +2,8 @@
 
 一个语言无关、低资源占用的 VS Code 定义跳转扩展。它读取工作区已有的经典格式 `tags` 或 `.tags`；也可由用户通过编辑器右键菜单调用本机的 ctags，在工作区根目录生成 `.tags` 文件。
 
+源代码仓库：<https://github.com/eden36/vscode-simple-ctags>
+
 ## 功能
 
 - 通过“simple ctags: 跳转到当前符号定义”命令在任意文件类型中跳转；不接管 F12、Ctrl+单击或 Peek Definition。
