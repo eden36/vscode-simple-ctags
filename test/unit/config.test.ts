@@ -24,7 +24,7 @@ describe('配置读取', () => {
 
   it('忽略含路径分隔符或相对目录的文件名', () => {
     setConfigurationValues({
-      'ctagsNavigator.tagFileNames': ['tags', '../tags', 'sub/tags', 'sub\\tags', '..', '.', '', 42]
+      'simpleCtags.tagFileNames': ['tags', '../tags', 'sub/tags', 'sub\\tags', '..', '.', '', 42]
     });
     const config = read();
     assert.deepEqual(config.tagFileNames, ['tags']);
@@ -33,40 +33,40 @@ describe('配置读取', () => {
   });
 
   it('全部文件名非法时回退默认值', () => {
-    setConfigurationValues({ 'ctagsNavigator.tagFileNames': ['/etc/tags'] });
+    setConfigurationValues({ 'simpleCtags.tagFileNames': ['/etc/tags'] });
     const config = read();
     assert.deepEqual(config.tagFileNames, ['.tags', 'tags']);
     assert.ok(messages.some((message) => message.includes('已使用默认值')));
   });
 
   it('maxResults 超范围或非整数时回退默认值并说明原因', () => {
-    setConfigurationValues({ 'ctagsNavigator.maxResults': 0 });
+    setConfigurationValues({ 'simpleCtags.maxResults': 0 });
     assert.equal(read().maxResults, 50);
     assert.ok(messages.some((message) => message.includes('超出 1–200')));
 
     messages = [];
-    setConfigurationValues({ 'ctagsNavigator.maxResults': 201 });
+    setConfigurationValues({ 'simpleCtags.maxResults': 201 });
     assert.equal(read().maxResults, 50);
     assert.ok(messages.some((message) => message.includes('超出 1–200')));
 
     messages = [];
-    setConfigurationValues({ 'ctagsNavigator.maxResults': 12.5 });
+    setConfigurationValues({ 'simpleCtags.maxResults': 12.5 });
     assert.equal(read().maxResults, 50);
     assert.ok(messages.some((message) => message.includes('不是整数')));
 
     messages = [];
-    setConfigurationValues({ 'ctagsNavigator.maxResults': '50' });
+    setConfigurationValues({ 'simpleCtags.maxResults': '50' });
     assert.equal(read().maxResults, 50);
     assert.ok(messages.some((message) => message.includes('不是整数')));
 
     messages = [];
-    setConfigurationValues({ 'ctagsNavigator.maxResults': 200 });
+    setConfigurationValues({ 'simpleCtags.maxResults': 200 });
     assert.equal(read().maxResults, 200);
     assert.deepEqual(messages, []);
   });
 
   it('enabled 为 false 时如实返回', () => {
-    setConfigurationValues({ 'ctagsNavigator.enabled': false });
+    setConfigurationValues({ 'simpleCtags.enabled': false });
     assert.equal(read().enabled, false);
   });
 });

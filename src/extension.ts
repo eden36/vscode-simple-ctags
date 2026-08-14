@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     diagnostics,
     provider,
-    vscode.commands.registerCommand('ctagsNavigator.goToDefinition', async () => {
+    vscode.commands.registerCommand('simpleCtags.goToDefinition', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         return;
@@ -76,11 +76,11 @@ export function activate(context: vscode.ExtensionContext): void {
         source.dispose();
       }
     }),
-    vscode.commands.registerCommand('ctagsNavigator.clearCache', () => {
+    vscode.commands.registerCommand('simpleCtags.clearCache', () => {
       provider.clear();
       diagnostics.report('缓存已清理，tags 文件句柄已关闭。');
     }),
-    vscode.commands.registerCommand('ctagsNavigator.diagnoseCurrentSymbol', async () => {
+    vscode.commands.registerCommand('simpleCtags.diagnoseCurrentSymbol', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         diagnostics.showSnapshot({ candidateCount: 0, resultCount: 0, elapsedMs: 0 });
@@ -88,7 +88,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       await provider.diagnose(editor.document, editor.selection.active);
     }),
-    vscode.commands.registerCommand('ctagsNavigator.generateTags', async () => {
+    vscode.commands.registerCommand('simpleCtags.generateTags', async () => {
       if (isGeneratingTags) {
         void vscode.window.showInformationMessage('simple ctags：正在生成 tags 文件，请等待本次生成结束。');
         return;
@@ -157,7 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('ctagsNavigator')) {
+      if (event.affectsConfiguration('simpleCtags')) {
         provider.clear();
         diagnostics.report('配置已变化，缓存已清理。');
       }

@@ -39,40 +39,40 @@
   "contributes": {
     "commands": [
       {
-        "command": "ctagsNavigator.goToDefinition",
+        "command": "simpleCtags.goToDefinition",
         "title": "simple ctags: 跳转到当前符号定义"
       },
       {
-        "command": "ctagsNavigator.clearCache",
+        "command": "simpleCtags.clearCache",
         "title": "simple ctags: 清理缓存"
       },
       {
-        "command": "ctagsNavigator.diagnoseCurrentSymbol",
+        "command": "simpleCtags.diagnoseCurrentSymbol",
         "title": "simple ctags: 诊断当前符号"
       },
       {
-        "command": "ctagsNavigator.generateTags",
+        "command": "simpleCtags.generateTags",
         "title": "simple ctags: 生成或更新 Tags"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "command": "ctagsNavigator.generateTags",
+          "command": "simpleCtags.generateTags",
           "when": "editorTextFocus && workspaceFolderCount != 0 && isWorkspaceTrusted",
-          "group": "z_ctagsNavigator@9999"
+          "group": "z_simpleCtags@9999"
         }
       ]
     },
     "configuration": {
       "title": "simple ctags",
       "properties": {
-        "ctagsNavigator.enabled": {
+        "simpleCtags.enabled": {
           "type": "boolean",
           "default": true,
           "description": "启用“跳转到当前符号定义”命令。"
         },
-        "ctagsNavigator.tagFileNames": {
+        "simpleCtags.tagFileNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -84,7 +84,7 @@
           "minItems": 1,
           "description": "按优先级查找的 tags 文件名。只允许文件名。"
         },
-        "ctagsNavigator.maxResults": {
+        "simpleCtags.maxResults": {
           "type": "integer",
           "default": 50,
           "minimum": 1,
