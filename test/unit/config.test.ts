@@ -17,7 +17,7 @@ describe('配置读取', () => {
   it('缺省时使用默认值', () => {
     const config = read();
     assert.equal(config.enabled, true);
-    assert.deepEqual(config.tagFileNames, ['tags', '.tags']);
+    assert.deepEqual(config.tagFileNames, ['.tags', 'tags']);
     assert.equal(config.maxResults, 50);
     assert.deepEqual(messages, []);
   });
@@ -35,7 +35,7 @@ describe('配置读取', () => {
   it('全部文件名非法时回退默认值', () => {
     setConfigurationValues({ 'ctagsNavigator.tagFileNames': ['/etc/tags'] });
     const config = read();
-    assert.deepEqual(config.tagFileNames, ['tags', '.tags']);
+    assert.deepEqual(config.tagFileNames, ['.tags', 'tags']);
     assert.ok(messages.some((message) => message.includes('已使用默认值')));
   });
 

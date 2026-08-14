@@ -44,8 +44,20 @@
       {
         "command": "ctagsNavigator.diagnoseCurrentSymbol",
         "title": "Ctags Navigator: 诊断当前符号"
+      },
+      {
+        "command": "ctagsNavigator.generateTags",
+        "title": "Ctags Navigator: 生成或更新 Tags"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "ctagsNavigator.generateTags",
+          "group": "z_ctagsNavigator@9999"
+        }
+      ]
+    },
     "configuration": {
       "title": "Ctags Navigator Lite",
       "properties": {
@@ -60,8 +72,8 @@
             "type": "string"
           },
           "default": [
-            "tags",
-            ".tags"
+            ".tags",
+            "tags"
           ],
           "minItems": 1,
           "description": "按优先级查找的 tags 文件名。只允许文件名。"

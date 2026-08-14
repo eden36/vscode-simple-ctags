@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { NavigatorConfig } from './types';
 
-const DEFAULT_NAMES = ['tags', '.tags'] as const;
+const DEFAULT_NAMES = ['.tags', 'tags'] as const;
 
 export function readConfig(report: (message: string) => void): NavigatorConfig {
   const configuration = vscode.workspace.getConfiguration('ctagsNavigator');
@@ -21,7 +21,7 @@ export function readConfig(report: (message: string) => void): NavigatorConfig {
     });
   }
   if (tagFileNames.length === 0) {
-    report('配置 ctagsNavigator.tagFileNames 无有效值，已使用默认值 tags、.tags。');
+    report('配置 ctagsNavigator.tagFileNames 无有效值，已使用默认值 .tags、tags。');
     tagFileNames = [...DEFAULT_NAMES];
   }
 

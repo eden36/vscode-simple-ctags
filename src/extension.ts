@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import { Diagnostics } from './diagnostics';
 import type { DefinitionLink } from './types';
@@ -8,10 +10,12 @@ interface DefinitionQuickPickItem extends vscode.QuickPickItem {
 }
 
 let activeProvider: CtagsDefinitionProvider | undefined;
+const execFileAsync = promisify(execFile);
 
 export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = new Diagnostics();
   const provider = new CtagsDefinitionProvider(diagnostics);
+  let isGeneratingTags = false;
   activeProvider = provider;
   context.subscriptions.push(
     diagnostics,
@@ -68,6 +72,66 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await provider.diagnose(editor.document, editor.selection.active);
+    }),
+    vscode.commands.registerCommand('ctagsNavigator.generateTags', async () => {
+      if (isGeneratingTags) {
+        return;
+      }
+      if (!vscode.workspace.isTrusted) {
+        void vscode.window.showWarningMessage('当前工作区未受信任，无法生成 tags 文件。');
+        return;
+      }
+
+      const folders = vscode.workspace.workspaceFolders;
+      let folder = vscode.window.activeTextEditor
+        ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+        : undefined;
+      if (!folder && folders?.length === 1) {
+        folder = folders[0];
+      }
+      if (!folder && folders && folders.length > 1) {
+        const selected = await vscode.window.showQuickPick(
+          folders.map((candidate) => ({
+            label: candidate.name,
+            description: candidate.uri.fsPath,
+            folder: candidate
+          })),
+          { placeHolder: '请选择要生成 tags 文件的工作区目录。' }
+        );
+        folder = selected?.folder;
+      }
+      if (!folder) {
+        void vscode.window.showWarningMessage('请先打开包含源代码的工作区目录。');
+        return;
+      }
+
+      isGeneratingTags = true;
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: '正在生成 tags 文件',
+            cancellable: false
+          },
+          async () => {
+            await execFileAsync('ctags', ['--sort=yes', '--fields=+n', '-R', '-f', '.tags', '.'], {
+              cwd: folder.uri.fsPath,
+              windowsHide: true
+            });
+          }
+        );
+        provider.clear();
+        void vscode.window.showInformationMessage(`已在“${folder.name}”生成 .tags 文件。`);
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+          void vscode.window.showWarningMessage('未找到 ctags。请安装 Universal Ctags，并确保其已加入 PATH。');
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        void vscode.window.showWarningMessage(`生成 tags 文件失败：${message}`);
+      } finally {
+        isGeneratingTags = false;
+      }
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration('ctagsNavigator')) {

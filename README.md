@@ -1,6 +1,6 @@
 # Ctags Navigator Lite
 
-一个语言无关、低资源占用的 VS Code 定义跳转扩展。它只读取工作区已有的经典格式 `tags` 或 `.tags`，不运行 ctags、不扫描源码、不创建后台进程或文件监听器。
+一个语言无关、低资源占用的 VS Code 定义跳转扩展。它读取工作区已有的经典格式 `tags` 或 `.tags`；也可由用户通过编辑器右键菜单调用本机的 ctags，在工作区根目录生成 `.tags` 文件。
 
 ## 功能
 
@@ -11,13 +11,16 @@
 - 支持数字地址、搜索地址、`line`、`kind` 和常见 scope 扩展字段。
 - 识别 `.`、`::`、`->`、`#`、`/`、`\` 限定上下文并稳定排序候选。
 - 找不到 tags、符号或候选时静默返回，不阻断其他语言扩展。
+- 编辑器右键菜单提供“生成 Tags”入口，可在当前工作区根目录生成或更新 `.tags` 文件。
 
 ## 准备 tags
 
-扩展要求经典格式、按区分大小写的符号名排序。推荐同时生成行号：
+扩展要求经典格式、按区分大小写的符号名排序。安装 Universal Ctags 并确保 VS Code 可以找到 `ctags` 后，点击编辑器右键菜单中的“生成 Tags”即可在当前文件所属工作区的根目录创建 `.tags`，不会写入当前文件所在的子目录。多根工作区且没有活动编辑器时，会要求选择目标目录。
+
+也可以自行生成，推荐同时生成行号：
 
 ```bash
-ctags --sort=yes --fields=+n -R .
+ctags --sort=yes --fields=+n -R -f .tags .
 ```
 
 支持 `!_TAG_FILE_SORTED=1`。未声明排序状态时会按已排序处理并写入诊断输出；值为 `0` 或 `2` 时会拒绝查询，不进行全文件线性回退。
@@ -27,7 +30,7 @@ ctags --sort=yes --fields=+n -R .
 ```json
 {
   "ctagsNavigator.enabled": true,
-  "ctagsNavigator.tagFileNames": ["tags", ".tags"],
+  "ctagsNavigator.tagFileNames": [".tags", "tags"],
   "ctagsNavigator.maxResults": 50
 }
 ```
@@ -39,15 +42,16 @@ ctags --sort=yes --fields=+n -R .
 - `Ctags Navigator: 跳转到当前符号定义`：单个定义直接跳转，多个定义按“相对路径:行号”和目标行内容显示列表供选择，未找到定义时显示提示。扩展不提供默认快捷键；可在 VS Code 的“键盘快捷方式”中搜索此命令后自行绑定。
 - `Ctags Navigator: 清理缓存`：清理定位、查询和地址缓存，并关闭 tags 文件句柄。
 - `Ctags Navigator: 诊断当前符号`：按需打开输出通道，显示启用状态、符号、限定上下文、tags、排序状态、候选数量和耗时。
+- `Ctags Navigator: 生成或更新 Tags`：调用本机安装的 ctags，在当前文件所属工作区的根目录生成 `.tags`；未受信任的工作区不会执行此操作。
 
 ## 资源与安全边界
 
-- 空闲时无磁盘活动、定时器、监听器和子进程。
+- 空闲时无磁盘活动、定时器、监听器和子进程；仅在用户点击“生成 Tags”时启动一次 ctags 子进程。
 - 最多打开 4 个 tags 文件句柄；自有查询与地址缓存总计不超过 4 MiB。
 - 搜索地址只执行还原转义后的精确行匹配，不作为 JavaScript 正则执行；无行号时最多流式扫描目标文件前 32 MiB。
 - 单次请求最多尝试解析 200 个候选，避免大量无法定位的候选各自触发一次目标文件扫描。
 - 记录同时带行号和搜索地址时会校验该行内容，不一致（tags 已过期）则按搜索地址重新定位。
-- 扩展只读取文件，不执行项目代码，支持不受信任工作区。
+- 扩展不执行项目代码；生成 Tags 仅在受信任工作区中调用 `ctags`，并使用固定参数而非 shell 命令字符串。
 
 ## 开发
 
@@ -63,4 +67,4 @@ npm run test:integration
 
 ## 第一版不包含
 
-自动生成或更新 tags、外部命令、JSON tags、LSP/AST/Tree-sitter、引用、重命名、补全、诊断、语言特定规则及 Web 版 VS Code。
+自动后台生成或更新 tags、JSON tags、LSP/AST/Tree-sitter、引用、重命名、补全、诊断、语言特定规则及 Web 版 VS Code。
