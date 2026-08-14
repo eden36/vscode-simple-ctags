@@ -2,7 +2,7 @@
   "name": "simple-ctags",
   "displayName": "simple ctags",
   "description": "基于已有经典 tags 文件的轻量、语言无关定义跳转。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "saltcoreyan",
   "license": "MIT",
   "repository": {

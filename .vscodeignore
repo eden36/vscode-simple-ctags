@@ -4,6 +4,7 @@
 .gitignore
 AGENTS.md
 code_style.md
+tmp/**
 src/**
 test/**
 node_modules/**
