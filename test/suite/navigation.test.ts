@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 
 describe('VS Code 定义导航', () => {
   before(async () => {
-    const extension = vscode.extensions.getExtension('local.simple-ctags');
+    // 扩展 ID 必须与 package.json 的 publisher + name 一致，改动任一处都要同步这里。
+    const extension = vscode.extensions.getExtension('saltcoreyan.simple-ctags');
     assert.ok(extension, '扩展未安装到测试宿主');
     await extension.activate();
   });

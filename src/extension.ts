@@ -19,6 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = new Diagnostics();
   const provider = new CtagsDefinitionProvider(diagnostics);
   let isGeneratingTags = false;
+  let pendingDefinition: vscode.CancellationTokenSource | undefined;
   activeProvider = provider;
   context.subscriptions.push(
     diagnostics,
@@ -28,9 +29,16 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!editor) {
         return;
       }
+      // 连续触发时取消上一次请求：既中止仍在扫描的查询，也关掉它可能已经弹出的选择列表。
+      pendingDefinition?.cancel();
+      pendingDefinition?.dispose();
       const source = new vscode.CancellationTokenSource();
+      pendingDefinition = source;
       try {
         const links = await provider.provideDefinition(editor.document, editor.selection.active, source.token);
+        if (source.token.isCancellationRequested) {
+          return;
+        }
         if (!links || links.length === 0) {
           void vscode.window.showInformationMessage('simple ctags：未找到当前符号的定义。');
           return;
@@ -48,19 +56,23 @@ export function activate(context: vscode.ExtensionContext): void {
             {
               matchOnDetail: true,
               placeHolder: `找到 ${links.length} 个定义，请选择跳转目标。`
-            }
+            },
+            source.token
           );
           if (!selected) {
             return;
           }
           link = selected.link;
         }
-        if (link) {
+        if (link && !source.token.isCancellationRequested) {
           await vscode.window.showTextDocument(link.targetUri, {
             selection: link.targetSelectionRange ?? link.targetRange
           });
         }
       } finally {
+        if (pendingDefinition === source) {
+          pendingDefinition = undefined;
+        }
         source.dispose();
       }
     }),
@@ -153,7 +165,14 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       provider.clear();
       diagnostics.report('工作区目录已变化，缓存已清理。');
-    })
+    }),
+    {
+      dispose: () => {
+        pendingDefinition?.cancel();
+        pendingDefinition?.dispose();
+        pendingDefinition = undefined;
+      }
+    }
   );
 }
 

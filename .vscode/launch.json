@@ -19,7 +19,7 @@
       "request": "launch",
       "args": [
         "--profile",
-        "Ctags Navigator Lite 干净调试",
+        "simple ctags 干净调试",
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}",
         "${workspaceFolder}/test/fixtures/workspace"

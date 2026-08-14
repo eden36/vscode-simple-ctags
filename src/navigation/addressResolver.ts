@@ -11,6 +11,12 @@ interface ScannedLine {
   readonly truncated: boolean;
 }
 
+interface ParsedAddress {
+  readonly record: TagRecord;
+  readonly line?: number;
+  readonly pattern?: string;
+}
+
 interface ScanResult {
   readonly lines: Map<number, ScannedLine>;
   readonly patternLines: Map<string, number>;
@@ -41,20 +47,22 @@ export class AddressResolver {
 
     const wantedLines = new Set<number>();
     const patterns = new Set<string>();
-    for (const record of records) {
+    const parsed = records.map((record) => {
       const lineNumber = record.line ?? numericAddress(record.address);
-      if (lineNumber !== undefined) {
-        wantedLines.add(Math.max(0, lineNumber - 1));
-      }
+      const line = lineNumber === undefined ? undefined : Math.max(0, lineNumber - 1);
       const pattern = decodeSearchPattern(record.address);
+      if (line !== undefined) {
+        wantedLines.add(line);
+      }
       if (pattern) {
         patterns.add(pattern);
       }
-    }
+      return { record, line, pattern };
+    });
 
     const scan = await scanLines(targetUri, wantedLines, patterns, token);
-    for (const record of records) {
-      results.set(record.bytePosition, buildTarget(record, targetUri, symbol, scan));
+    for (const item of parsed) {
+      results.set(item.record.bytePosition, buildTarget(item, targetUri, symbol, scan));
     }
     return results;
   }
@@ -80,15 +88,13 @@ export function resolveTargetUri(tagFileUri: vscode.Uri, file: string): vscode.U
 }
 
 function buildTarget(
-  record: TagRecord,
+  parsed: ParsedAddress,
   targetUri: vscode.Uri,
   symbol: string,
   scan: ScanResult
 ): ResolvedTarget | undefined {
-  const lineNumber = record.line ?? numericAddress(record.address);
-  const pattern = decodeSearchPattern(record.address);
-  if (lineNumber !== undefined) {
-    const line = Math.max(0, lineNumber - 1);
+  const { line, pattern } = parsed;
+  if (line !== undefined) {
     const actual = scan.lines.get(line);
     // 行内容与搜索地址不一致说明 tags 已过期，改用搜索地址重新定位；
     // 被截断的超长行无法逐字比较，仍按行号定位。
@@ -170,6 +176,7 @@ async function scanLines(
     }
   };
 
+  let reachedEof = false;
   try {
     while (position < MAX_TARGET_SCAN_BYTES) {
       throwIfCancelled(token);
@@ -180,6 +187,7 @@ async function scanLines(
         position
       );
       if (bytesRead === 0) {
+        reachedEof = true;
         break;
       }
       position += bytesRead;
@@ -198,7 +206,9 @@ async function scanLines(
         start = newline + 1;
       }
     }
-    if (chunks.length > 0 || collected > 0 || lineBytes > 0) {
+    // 只有确实读到文件末尾，残留片段才是完整的最后一行；
+    // 因扫描上限中止时它只是半行，当成整行会得出错误的行内容与匹配结果。
+    if (reachedEof && lineBytes > 0) {
       finishLine();
     }
     return { lines, patternLines };

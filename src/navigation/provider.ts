@@ -189,35 +189,39 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
     // 解析失败的候选不计入 maxResults，需要单独限制尝试次数，
     // 否则大量无法定位的候选会各自触发一次目标文件扫描。
     const attempted = candidates.slice(0, MAX_RESOLVE_ATTEMPTS);
-    const groups = new Map<string, { readonly uri: vscode.Uri; readonly records: TagRecord[] }>();
+    const groups = new Map<string, TagRecord[]>();
     for (const candidate of attempted) {
       const key = candidate.targetUri.toString();
       const group = groups.get(key);
       if (group) {
-        group.records.push(candidate.record);
+        group.push(candidate.record);
       } else {
-        groups.set(key, { uri: candidate.targetUri, records: [candidate.record] });
+        groups.set(key, [candidate.record]);
       }
-    }
-
-    const resolvedByFile = new Map<string, Map<number, ResolvedTarget | undefined>>();
-    for (const [key, group] of groups) {
-      if (token.isCancellationRequested) {
-        break;
-      }
-      resolvedByFile.set(
-        key,
-        await this.service.resolveGroup(located, group.uri, group.records, context.symbol, token)
-      );
     }
 
     const links: DefinitionLink[] = [];
     const seen = new Set<string>();
+    // 按候选顺序推进，遇到未解析过的目标文件才整体解析它，凑满 maxResults 就停：
+    // 既保留同文件一次扫描的收益，也不为用完不到的候选去扫额外的文件。
+    const resolvedByFile = new Map<string, Map<number, ResolvedTarget | undefined>>();
     for (const candidate of attempted) {
-      if (links.length >= maxResults) {
+      if (links.length >= maxResults || token.isCancellationRequested) {
         break;
       }
-      const resolved = resolvedByFile.get(candidate.targetUri.toString())?.get(candidate.record.bytePosition);
+      const fileKey = candidate.targetUri.toString();
+      let group = resolvedByFile.get(fileKey);
+      if (!group) {
+        group = await this.service.resolveGroup(
+          located,
+          candidate.targetUri,
+          groups.get(fileKey) ?? [candidate.record],
+          context.symbol,
+          token
+        );
+        resolvedByFile.set(fileKey, group);
+      }
+      const resolved = group.get(candidate.record.bytePosition);
       if (!resolved) {
         continue;
       }

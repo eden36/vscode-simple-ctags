@@ -7,7 +7,7 @@ export class Diagnostics implements vscode.Disposable {
   private readonly pending: string[] = [];
 
   public report(message: string): void {
-    const formatted = `[${new Date().toISOString()}] ${message}`;
+    const formatted = `[${localTimestamp()}] ${message}`;
     if (this.channel) {
       this.channel.appendLine(formatted);
       return;
@@ -52,4 +52,13 @@ export class Diagnostics implements vscode.Disposable {
     }
     return this.channel;
   }
+}
+
+// 诊断输出给人读，用本地时间；仍保留可排序的 ISO 风格。
+function localTimestamp(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 19)
+    .replace('T', ' ');
 }
