@@ -78,6 +78,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('simpleCtags.goToDefinition', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
+        void vscode.window.showWarningMessage('simple ctags：当前没有可跳转的编辑器。');
         return;
       }
       // 连续触发时取消上一次请求：既中止仍在扫描的查询，也关掉它可能已经弹出的选择列表。
@@ -86,12 +87,13 @@ export function activate(context: vscode.ExtensionContext): void {
       const source = new vscode.CancellationTokenSource();
       pendingDefinition = source;
       try {
-        const links = await provider.provideDefinition(editor.document, editor.selection.active, source.token);
+        const result = await provider.provideDefinition(editor.document, editor.selection.active, source.token);
         if (source.token.isCancellationRequested) {
           return;
         }
+        const links = result.links;
         if (!links || links.length === 0) {
-          void vscode.window.showInformationMessage('simple ctags：未找到当前符号的定义。');
+          void vscode.window.showWarningMessage(`simple ctags：${result.notice ?? '未找到当前符号的定义。'}`);
           return;
         }
         let link = links[0];
@@ -120,6 +122,12 @@ export function activate(context: vscode.ExtensionContext): void {
             selection: link.targetSelectionRange ?? link.targetRange
           });
         }
+      } catch (error) {
+        if (source.token.isCancellationRequested) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        void vscode.window.showWarningMessage(`simple ctags：跳转失败：${message}`);
       } finally {
         if (pendingDefinition === source) {
           pendingDefinition = undefined;

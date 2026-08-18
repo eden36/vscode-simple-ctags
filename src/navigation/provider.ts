@@ -37,9 +37,9 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
-  ): Promise<DefinitionLink[] | undefined> {
+  ): Promise<{ links: DefinitionLink[]; notice?: string }> {
     const result = await this.run(document, position, token, false);
-    return result.links.length > 0 ? result.links : undefined;
+    return { links: result.links, notice: result.notice };
   }
 
   public async diagnose(document: vscode.TextDocument, position: vscode.Position): Promise<void> {
@@ -79,17 +79,23 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
     position: vscode.Position,
     token: vscode.CancellationToken,
     diagnostic: boolean
-  ): Promise<{ links: DefinitionLink[]; snapshot: DiagnosticSnapshot }> {
+  ): Promise<{ links: DefinitionLink[]; snapshot: DiagnosticSnapshot; notice?: string }> {
     const snapshot: DiagnosticSnapshot = { candidateCount: 0, resultCount: 0, elapsedMs: 0 };
     const config = readConfig((message) => this.reportConfigOnce(message));
     snapshot.enabled = config.enabled;
-    if (!config.enabled || (document.uri.scheme !== 'file' && document.uri.scheme !== 'vscode-remote')) {
-      return { links: [], snapshot };
+    if (!config.enabled) {
+      return { links: [], snapshot, notice: '功能已关闭。' };
+    }
+    if (document.uri.scheme !== 'file' && document.uri.scheme !== 'vscode-remote') {
+      return { links: [], snapshot, notice: '当前文件不支持跳转。' };
     }
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (!folder) {
+      return { links: [], snapshot, notice: '当前文件不属于工作区目录。' };
+    }
     const context = extractSymbolContext(document, position);
-    if (!folder || !context) {
-      return { links: [], snapshot };
+    if (!context) {
+      return { links: [], snapshot, notice: '当前位置没有可识别的符号。' };
     }
     snapshot.symbol = context.symbol;
     snapshot.qualifier = context.qualifier;
@@ -98,7 +104,7 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
       return await this.service.withPermit(token, async () => {
         const located = await this.locator.locate(document.uri, folder, config.tagFileNames);
         if (!located) {
-          return { links: [], snapshot };
+          return { links: [], snapshot, notice: '未找到 tags 文件，请先生成 Tags。' };
         }
         snapshot.tagFile = located.uri.toString();
         snapshot.sortStatus = await this.service.sortStatus(located, token);
@@ -110,7 +116,7 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
             `${located.uri.toString()}:${located.version.size}:${located.version.mtimeMs}`,
             message
           );
-          return { links: [], snapshot };
+          return { links: [], snapshot, notice: message };
         }
         if (snapshot.sortStatus === 'unverified') {
           this.diagnostics.report(`tags 未声明排序状态，按区分大小写排序处理：${located.uri.toString()}`);
@@ -120,6 +126,12 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
         const scored = this.scoreAndSort(merged, located, document.uri, context);
         const links = await this.resolveLinks(scored, located, context, config.maxResults, token);
         snapshot.resultCount = links.length;
+        if (links.length === 0) {
+          const notice = snapshot.candidateCount > 0
+            ? '无法定位到定义所在的源文件。'
+            : '未找到当前符号的定义。';
+          return { links, snapshot, notice };
+        }
         return { links, snapshot };
       });
     } catch (error) {
@@ -129,15 +141,24 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
       if (error instanceof UnsupportedSortError) {
         snapshot.sortStatus = error.status;
         this.warnOnce(snapshot.tagFile, error.message);
-      } else if (error instanceof VersionChangedError) {
+        if (diagnostic) {
+          snapshot.cacheNote = error.message;
+        }
+        return { links: [], snapshot, notice: error.message };
+      }
+      if (error instanceof VersionChangedError) {
         this.diagnostics.report(error.message);
-      } else {
-        this.diagnostics.report(`定义查询失败：${error instanceof Error ? error.message : String(error)}`);
+        if (diagnostic) {
+          snapshot.cacheNote = error.message;
+        }
+        return { links: [], snapshot, notice: 'tags 文件已变化，请重试。' };
       }
+      const message = error instanceof Error ? error.message : String(error);
+      this.diagnostics.report(`定义查询失败：${message}`);
       if (diagnostic) {
-        snapshot.cacheNote = error instanceof Error ? error.message : String(error);
+        snapshot.cacheNote = message;
       }
-      return { links: [], snapshot };
+      return { links: [], snapshot, notice: `定义查询失败：${message}` };
     }
   }
 
@@ -246,7 +267,6 @@ export class CtagsDefinitionProvider implements vscode.Disposable {
       return;
     }
     this.diagnostics.report(message);
-    void vscode.window.showWarningMessage(`simple ctags：${message}`);
   }
 
   // 配置非法时每次跳转都会重复上报，去重后才不会挤占诊断缓冲。
