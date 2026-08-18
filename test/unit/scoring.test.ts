@@ -26,6 +26,19 @@ describe('候选评分', () => {
       scoreCandidate({ ...base, kind: 'class' }, target, source, context, new Set(['run']))
     );
   });
+
+  it('文件名与符号同名时优先级更高', () => {
+    const base = { name: 'DaoType', file: 'a.php', address: '1', fields: {}, bytePosition: 1 };
+    const source = { scheme: 'file', authority: '', fsPath: pathFor('project/system/services/modules/common/shop/imps/TcShop.php') } as any;
+    const sameNameTarget = { scheme: 'file', authority: '', fsPath: pathFor('project/system/datalevels/DaoType.php') } as any;
+    const nearTarget = { scheme: 'file', authority: '', fsPath: pathFor('project/system/services/modules/common/shop/DaoTypeAlias.php') } as any;
+    const context = { symbol: 'DaoType', sourceRange: range, queries: ['DaoType'] };
+    assert.ok(
+      scoreCandidate(base, sameNameTarget, source, context, new Set(['DaoType']))
+      > scoreCandidate(base, nearTarget, source, context, new Set(['DaoType'])),
+      '同名文件应优先于仅路径更近的候选'
+    );
+  });
 });
 
 function pathFor(value: string): string {

@@ -31,7 +31,7 @@ ctags --sort=yes --fields=+n --exclude=.git --exclude=node_modules --exclude=dis
 {
   "simpleCtags.enabled": true,
   "simpleCtags.tagFileNames": [".tags", "tags"],
-  "simpleCtags.maxResults": 50
+  "simpleCtags.maxResults": 20
 }
 ```
 

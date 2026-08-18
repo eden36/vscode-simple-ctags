@@ -3,12 +3,13 @@ import * as vscode from 'vscode';
 import type { NavigatorConfig } from './types';
 
 const DEFAULT_NAMES = ['.tags', 'tags'] as const;
+const DEFAULT_MAX_RESULTS = 20;
 
 export function readConfig(report: (message: string) => void): NavigatorConfig {
   const configuration = vscode.workspace.getConfiguration('simpleCtags');
   const enabled = configuration.get<boolean>('enabled', true);
   const rawNames = configuration.get<unknown>('tagFileNames', DEFAULT_NAMES);
-  const rawMaxResults = configuration.get<unknown>('maxResults', 50);
+  const rawMaxResults = configuration.get<unknown>('maxResults', DEFAULT_MAX_RESULTS);
 
   let tagFileNames: string[] = [];
   if (Array.isArray(rawNames)) {
@@ -25,11 +26,11 @@ export function readConfig(report: (message: string) => void): NavigatorConfig {
     tagFileNames = [...DEFAULT_NAMES];
   }
 
-  let maxResults = 50;
+  let maxResults = DEFAULT_MAX_RESULTS;
   if (typeof rawMaxResults !== 'number' || !Number.isInteger(rawMaxResults)) {
-    report('配置 simpleCtags.maxResults 不是整数，已使用默认值 50。');
+    report(`配置 simpleCtags.maxResults 不是整数，已使用默认值 ${DEFAULT_MAX_RESULTS}。`);
   } else if (rawMaxResults < 1 || rawMaxResults > 200) {
-    report('配置 simpleCtags.maxResults 超出 1–200，已使用默认值 50。');
+    report(`配置 simpleCtags.maxResults 超出 1–200，已使用默认值 ${DEFAULT_MAX_RESULTS}。`);
   } else {
     maxResults = rawMaxResults;
   }

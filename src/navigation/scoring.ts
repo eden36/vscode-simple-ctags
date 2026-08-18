@@ -2,6 +2,8 @@ import * as path from 'node:path';
 import type * as vscode from 'vscode';
 import type { SymbolContext, TagRecord } from '../types';
 
+const EXACT_FILENAME_BONUS = 500;
+
 export function normalizeScope(value: string): string {
   return value
     .split(/::|->|[.#/\\]/)
@@ -32,6 +34,7 @@ export function scoreCandidate(
   } else if (sameUriDirectory(targetUri, sourceUri)) {
     score += 40;
   }
+  score += matchFileNameScore(targetUri, context.symbol);
   score += Math.max(0, 30 - pathDistance(path.dirname(sourceUri.fsPath), path.dirname(targetUri.fsPath)) * 5);
   return score;
 }
@@ -66,4 +69,14 @@ function sameUriDirectory(left: vscode.Uri, right: vscode.Uri): boolean {
 function normalizePath(value: string): string {
   const normalized = path.normalize(value);
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function matchFileNameScore(targetUri: vscode.Uri, symbol: string): number {
+  const targetName = path.parse(targetUri.fsPath).name;
+  if (targetName === symbol) {
+    return EXACT_FILENAME_BONUS;
+  }
+  return targetName.localeCompare(symbol, undefined, { sensitivity: 'accent' }) === 0
+    ? EXACT_FILENAME_BONUS
+    : 0;
 }

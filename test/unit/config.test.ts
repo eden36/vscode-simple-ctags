@@ -18,7 +18,7 @@ describe('配置读取', () => {
     const config = read();
     assert.equal(config.enabled, true);
     assert.deepEqual(config.tagFileNames, ['.tags', 'tags']);
-    assert.equal(config.maxResults, 50);
+    assert.equal(config.maxResults, 20);
     assert.deepEqual(messages, []);
   });
 
@@ -41,22 +41,22 @@ describe('配置读取', () => {
 
   it('maxResults 超范围或非整数时回退默认值并说明原因', () => {
     setConfigurationValues({ 'simpleCtags.maxResults': 0 });
-    assert.equal(read().maxResults, 50);
+    assert.equal(read().maxResults, 20);
     assert.ok(messages.some((message) => message.includes('超出 1–200')));
 
     messages = [];
     setConfigurationValues({ 'simpleCtags.maxResults': 201 });
-    assert.equal(read().maxResults, 50);
+    assert.equal(read().maxResults, 20);
     assert.ok(messages.some((message) => message.includes('超出 1–200')));
 
     messages = [];
     setConfigurationValues({ 'simpleCtags.maxResults': 12.5 });
-    assert.equal(read().maxResults, 50);
+    assert.equal(read().maxResults, 20);
     assert.ok(messages.some((message) => message.includes('不是整数')));
 
     messages = [];
     setConfigurationValues({ 'simpleCtags.maxResults': '50' });
-    assert.equal(read().maxResults, 50);
+    assert.equal(read().maxResults, 20);
     assert.ok(messages.some((message) => message.includes('不是整数')));
 
     messages = [];

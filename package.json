@@ -86,7 +86,7 @@
         },
         "simpleCtags.maxResults": {
           "type": "integer",
-          "default": 50,
+          "default": 20,
           "minimum": 1,
           "maximum": 200,
           "description": "单次定义请求返回的最大候选数。"

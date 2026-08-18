@@ -4,5 +4,6 @@ out/
 *.vsix
 .vscode-test/
 coverage/
+.tags
 
 /tmp
